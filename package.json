@@ -16,6 +16,7 @@
   "devDependencies": {
     "@stroiman/respect": "^0.10.0",
     "bs-platform": "^5.0.3",
-    "nodemon": "^1.19.0"
+    "nodemon": "^1.19.0",
+    "supertest": "^4.0.2"
   }
 }
