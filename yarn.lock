@@ -2,7 +2,7 @@
 # yarn lockfile v1
 
 
-"@stroiman/async@^0.7":
+"@stroiman/async@^0.7", "@stroiman/async@^0.7.0":
   version "0.7.0"
   resolved "https://registry.yarnpkg.com/@stroiman/async/-/async-0.7.0.tgz#b046a0f9e7421ad7411f0eb0b17eaaefc56a530a"
   integrity sha512-Z7CaxHW3tTOzrAcr/4MjXL42vjJZL6UyEGGJDkIQajI58Ncj7Km6b30ckq6DQcCDVTohxcmw4sAEAyZYSO6emg==
