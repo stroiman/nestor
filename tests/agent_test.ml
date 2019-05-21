@@ -36,23 +36,9 @@ describe "Server" [
       |> Supertest.endAsync
     );
 
-  it "Handles cookies" (fun _ ->
-      let handler: (unit, unit) handlerM =
-        getCookie "Auth"
-          ~onMissing:(sendText "Missing Cookie")
-          ~onFound:(fun (cookie) -> sendText("Hello, " ^ cookie) ())
-      in
-      Supertest.request(createServerM(handler))
-      |> Supertest.get("/b")
-      |> Supertest.set "cookie" "Auth=John"
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Hello, John")
-      |> Supertest.endAsync
-    );
-
   it "Handles cookies - new syntax - missing cookie" (fun _ ->
       let handler =
-        getCookie2 "Auth"
+        getCookie "Auth"
           ~onMissing:(sendText "Missing Cookie")
         >=>
         (fun (cookie) -> sendText("Hello, " ^ cookie) ())
@@ -66,7 +52,7 @@ describe "Server" [
 
   it "Handles cookies - new syntax" (fun _ ->
       let handler =
-        getCookie2 "Auth"
+        getCookie "Auth"
           ~onMissing:(sendText "Missing Cookie")
         >=>
         (fun (cookie) -> sendText("Hello, " ^ cookie) ())

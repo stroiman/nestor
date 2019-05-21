@@ -90,20 +90,6 @@ let tryGetCookie = name: handlerM('a, option(string)) =>
 
 let getCookie =
     (
-      ~onMissing: handlerM('a, 'b),
-      ~onFound: handlerM(string, 'b),
-      name,
-    )
-    : handlerM('a, 'b) =>
-  (x: 'a, req) =>
-    switch (Request.getCookie(name, req)) {
-    | Some(cookie) => onFound(cookie, req)
-    | None => onMissing(x, req)
-    };
-
-
-let getCookie2 =
-    (
       ~onMissing: handlerM('a, string),
       name,
     )
@@ -114,8 +100,8 @@ let getCookie2 =
     | None => Stop(x, y => onMissing(y, req))
     };
 
-let createServerM = (handleFunc: handlerM('a, 'b)): Http.requestListener =>
-  (req, res) => {
+let createServerM = (handleFunc: handlerM('a, 'b)) =>
+                                                    [@bs] (req, res) => {
     let response = Response.from_native_response(res);
     switch (handleFunc((), Request.from_native_request(req))) {
     | CannotHandle => ()
