@@ -36,8 +36,7 @@ describe "Server" [
       |> Supertest.endAsync
     );
 
-  focus @@
-    it "Handles cookies" (fun _ ->
+  it "Handles cookies" (fun _ ->
       let handler: (unit, unit) handlerM =
         getCookie "Auth"
           ~onMissing:(sendText "Missing Cookie")
@@ -49,5 +48,34 @@ describe "Server" [
       |> Supertest.expectStatus(200)
       |> Supertest.expectBody("Hello, John")
       |> Supertest.endAsync
-      );
+    );
+
+  it "Handles cookies - new syntax - missing cookie" (fun _ ->
+      let handler =
+        getCookie2 "Auth"
+          ~onMissing:(sendText "Missing Cookie")
+        >=>
+        (fun (cookie) -> sendText("Hello, " ^ cookie) ())
+      in
+      Supertest.request(createServerM(handler))
+      |> Supertest.get("/b")
+      |> Supertest.expectStatus(200)
+      |> Supertest.expectBody("Missing Cookie")
+      |> Supertest.endAsync
+    );
+
+  it "Handles cookies - new syntax" (fun _ ->
+      let handler =
+        getCookie2 "Auth"
+          ~onMissing:(sendText "Missing Cookie")
+        >=>
+        (fun (cookie) -> sendText("Hello, " ^ cookie) ())
+      in
+      Supertest.request(createServerM(handler))
+      |> Supertest.get("/b")
+      |> Supertest.set "cookie" "Auth=John"
+      |> Supertest.expectStatus(200)
+      |> Supertest.expectBody("Hello, John")
+      |> Supertest.endAsync
+    );
 ] |> register;

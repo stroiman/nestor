@@ -9,7 +9,6 @@ module Request = {
   let from_native_request = (req: Http.Request.t) => {
     let url = Http.Request.url(req) |> Http.Url.parse;
     let headers = Http.Request.headers(req);
-    Js.log2("Headers", headers);
     let cookies =
       headers->Js.Dict.get("cookie")
       |> (
@@ -37,9 +36,10 @@ module Response = {
 
 module Handler = {
   type response('a) =
-    | CannotHandle
-    | Response(Response.t => unit)
-    | Continue('a, Request.t);
+    | CannotHandle: response('a)
+    | Response(Response.t => unit): response('a)
+    | Continue('a, Request.t): response('a)
+    | Stop('b, 'b => response('a)): response('a)
   type t('a) = Request.t => response('a);
 
   let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
@@ -48,6 +48,7 @@ module Handler = {
       | CannotHandle => CannotHandle
       | Response(f) => Response(f)
       | Continue(data, req) => f(data, req)
+      | Stop(x, f) => f(x);
       };
 
   type handlerM('a, 'b) = 'a => t('b);
@@ -67,7 +68,7 @@ let path = p: handlerM('a, 'a) =>
       }
     );
 
-let sendText = text: handlerM('a, unit) =>
+let sendText = text: handlerM('a, 'b) =>
   (_, _) => Handler.Response(Response.send(text));
 
 let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
@@ -89,15 +90,28 @@ let tryGetCookie = name: handlerM('a, option(string)) =>
 
 let getCookie =
     (
-      ~onMissing: handlerM(unit, unit),
-      ~onFound: handlerM(string, unit),
+      ~onMissing: handlerM('a, 'b),
+      ~onFound: handlerM(string, 'b),
       name,
     )
-    : handlerM(unit, unit) =>
-  (x: unit, req) =>
+    : handlerM('a, 'b) =>
+  (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => onFound(cookie, req)
     | None => onMissing(x, req)
+    };
+
+
+let getCookie2 =
+    (
+      ~onMissing: handlerM('a, string),
+      name,
+    )
+    : handlerM('a, string) =>
+  (x: 'a, req) =>
+    switch (Request.getCookie(name, req)) {
+    | Some(cookie) => Continue(cookie, req)
+    | None => Stop(x, y => onMissing(y, req))
     };
 
 let createServerM = (handleFunc: handlerM('a, 'b)): Http.requestListener =>
@@ -107,5 +121,6 @@ let createServerM = (handleFunc: handlerM('a, 'b)): Http.requestListener =>
     | CannotHandle => ()
     | Continue(_) => ()
     | Response(handler) => handler(response)
+    | Stop(x, f) => ()
     };
   };
