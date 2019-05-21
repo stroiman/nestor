@@ -1,11 +1,18 @@
-  module Request = {
-    type t;
-  };
+module Url = {
+  type t;
+  [@bs.module "url"] external parse: string => t = "";
+  [@bs.get] external path: t => string = "";
+};
 
-  module Response = {
-    type t;
-    [@bs.send.pipe: t] external end_: string => unit = "end";
-  };
+module Request = {
+  type t;
 
-  type requestListener = (Request.t, Response.t) => unit;
+  [@bs.get] external url: t => string = "";
+};
 
+module Response = {
+  type t;
+  [@bs.send.pipe: t] external end_: string => unit = "end";
+};
+
+type requestListener = (Request.t, Response.t) => unit;

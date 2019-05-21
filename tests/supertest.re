@@ -17,6 +17,7 @@ type errorCallback = (Js.null(Error.t), Http.Response.t) => unit;
 [@bs.send.pipe: t] external send: Js.t('a) => t = "send";
 [@bs.send.pipe: t] external sendString: string => t = "send";
 [@bs.send.pipe: t] external expectStatus: int => t = "expect";
+[@bs.send.pipe: t] external expectBody: string => t = "expect";
 [@bs.send] external end_: (t, errorCallback) => unit = "end";
 
 let endAsync = x => {
