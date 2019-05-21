@@ -8,6 +8,7 @@ module Request = {
   type t;
 
   [@bs.get] external url: t => string = "";
+  [@bs.get] external headers: t => Js.Dict.t(string) = "";
 };
 
 module Response = {
@@ -16,3 +17,7 @@ module Response = {
 };
 
 type requestListener = (Request.t, Response.t) => unit;
+
+module Cookie = {
+  [@bs.module "cookie"] external parse: string => Js.Dict.t(string) = "";
+};

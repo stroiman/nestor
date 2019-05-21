@@ -1,15 +1,29 @@
 module Request = {
-  type t = {path: list(string)};
+  type t = {
+    cookies: Js.Dict.t(string),
+    path: list(string),
+  };
+
+  let getCookie = (name, req) => req.cookies->Js.Dict.get(name);
 
   let from_native_request = (req: Http.Request.t) => {
     let url = Http.Request.url(req) |> Http.Url.parse;
+    let headers = Http.Request.headers(req);
+    Js.log2("Headers", headers);
+    let cookies =
+      headers->Js.Dict.get("cookie")
+      |> (
+        fun
+        | Some(x) => Http.Cookie.parse(x)
+        | None => Js.Dict.empty()
+      );
     let path =
       Http.Url.path(url)
       |> Js.String.split("/")
       |> Array.to_list
       |> List.filter(x => x != "");
 
-    {path: path};
+    {path, cookies};
   };
 };
 
@@ -53,10 +67,8 @@ let path = p: handlerM('a, 'a) =>
       }
     );
 
-let sendText = text: handlerM('a, 'a) =>
+let sendText = text: handlerM('a, unit) =>
   (_, _) => Handler.Response(Response.send(text));
-
-let sendText2 = sendText;
 
 let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
   (z: 'a, req) =>
@@ -67,6 +79,25 @@ let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
       | CannotHandle => choose(xs, z, req)
       | x => x
       }
+    };
+
+let tryGetCookie = name: handlerM('a, option(string)) =>
+  (_, req) => {
+    let cookie = Request.getCookie(name, req);
+    Continue(cookie, req);
+  };
+
+let getCookie =
+    (
+      ~onMissing: handlerM(unit, unit),
+      ~onFound: handlerM(string, unit),
+      name,
+    )
+    : handlerM(unit, unit) =>
+  (x: unit, req) =>
+    switch (Request.getCookie(name, req)) {
+    | Some(cookie) => onFound(cookie, req)
+    | None => onMissing(x, req)
     };
 
 let createServerM = (handleFunc: handlerM('a, 'b)): Http.requestListener =>

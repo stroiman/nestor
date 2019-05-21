@@ -3,8 +3,7 @@ open Index
 open Index.Handler
 
 let router = choose [
-
-    path "a" >=> sendText2 "Got A";
+    path "a" >=> sendText "Got A";
     path "b" >=> sendText "Got B";
   ]
 
@@ -35,5 +34,20 @@ describe "Server" [
       |> Supertest.expectStatus(200)
       |> Supertest.expectBody("Got B")
       |> Supertest.endAsync
-    )
+    );
+
+  focus @@
+    it "Handles cookies" (fun _ ->
+      let handler: (unit, unit) handlerM =
+        getCookie "Auth"
+          ~onMissing:(sendText "Missing Cookie")
+          ~onFound:(fun (cookie) -> sendText("Hello, " ^ cookie) ())
+      in
+      Supertest.request(createServerM(handler))
+      |> Supertest.get("/b")
+      |> Supertest.set "cookie" "Auth=John"
+      |> Supertest.expectStatus(200)
+      |> Supertest.expectBody("Hello, John")
+      |> Supertest.endAsync
+      );
 ] |> register;

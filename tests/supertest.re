@@ -13,6 +13,7 @@ type errorCallback = (Js.null(Error.t), Http.Response.t) => unit;
 [@bs.module] external request: Http.requestListener => t = "supertest";
 [@bs.module "supertest"] external agent: Http.requestListener => t = "";
 [@bs.send.pipe: t] external get: string => t = "get";
+[@bs.send.pipe: t] external set: (string, string) => t = "set";
 [@bs.send.pipe: t] external post: string => t = "post";
 [@bs.send.pipe: t] external send: Js.t('a) => t = "send";
 [@bs.send.pipe: t] external sendString: string => t = "send";
@@ -20,6 +21,4 @@ type errorCallback = (Js.null(Error.t), Http.Response.t) => unit;
 [@bs.send.pipe: t] external expectBody: string => t = "expect";
 [@bs.send] external end_: (t, errorCallback) => unit = "end";
 
-let endAsync = x => {
-  end_(x) |> Async.from_js;
-};
+let endAsync = x => end_(x) |> Async.from_js;
