@@ -28,22 +28,30 @@ module Request = {
 };
 
 module Response = {
-  type t = {httpResponse: NodeModules.Http.Response.t};
+  type t = {
+    status: int,
+    text: string};
 
-  let from_native_response = (res: NodeModules.Http.Response.t) => {
-    httpResponse: res,
+  let empty = {
+    status: 200,
+    text: ""
   };
 
-  let send = (str, t) =>
-    t.httpResponse |> NodeModules.Http.Response.end_(str);
+  let send = (str, res) => {
+    {...res, text: str};
+  };
 };
 
 module Handler = {
+  type syncResponse('a) =
+    | CannotHandle;
+
   type response('a) =
     | CannotHandle: response('a)
-    | Response(Response.t => unit): response('a)
+    | Response(Response.t => Response.t): response('a)
     | Continue('a, Request.t): response('a)
     | Stop('b, 'b => response('a)): response('a);
+
   type t('a) = Request.t => response('a);
 
   let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
@@ -102,11 +110,12 @@ let getCookie =
 
 let createServerM = handleFunc =>
   (. req, res) => {
-    let response = Response.from_native_response(res);
     switch (handleFunc((), Request.from_native_request(req))) {
     | CannotHandle => ()
     | Continue(_) => ()
-    | Response(handler) => handler(response)
-    | Stop(x, f) => ()
+    | Response(handler) =>
+      let r = handler(Response.empty);
+      res |> NodeModules.Http.Response.end_(r.text);
+    | Stop(_x, _f) => ()
     };
   };
