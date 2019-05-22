@@ -16,7 +16,7 @@ module Response = {
   [@bs.send.pipe: t] external end_: string => unit = "end";
 };
 
-type requestListener = [@bs] (Request.t, Response.t) => unit;
+type requestListener = (. Request.t, Response.t) => unit;
 
 module Cookie = {
   [@bs.module "cookie"] external parse: string => Js.Dict.t(string) = "";

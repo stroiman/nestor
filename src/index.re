@@ -39,7 +39,7 @@ module Handler = {
     | CannotHandle: response('a)
     | Response(Response.t => unit): response('a)
     | Continue('a, Request.t): response('a)
-    | Stop('b, 'b => response('a)): response('a)
+    | Stop('b, 'b => response('a)): response('a);
   type t('a) = Request.t => response('a);
 
   let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
@@ -48,18 +48,18 @@ module Handler = {
       | CannotHandle => CannotHandle
       | Response(f) => Response(f)
       | Continue(data, req) => f(data, req)
-      | Stop(x, f) => f(x);
+      | Stop(x, f) => f(x)
       };
 
   type handlerM('a, 'b) = 'a => t('b);
 
   let (>=>) = (f: handlerM('a, 'b), g: handlerM('b, 'c)): handlerM('a, 'c) =>
-    x => (f(x) >>= g: t('c));
+    (x) => (f(x) >>= g: t('c));
 };
 
 open Handler;
 
-let path = p: handlerM('a, 'a) =>
+let path = (p): handlerM('a, 'a) =>
   (data, req) =>
     Request.(
       switch (req.path) {
@@ -68,7 +68,7 @@ let path = p: handlerM('a, 'a) =>
       }
     );
 
-let sendText = text: handlerM('a, 'b) =>
+let sendText = (text): handlerM('a, 'b) =>
   (_, _) => Handler.Response(Response.send(text));
 
 let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
@@ -82,18 +82,14 @@ let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
       }
     };
 
-let tryGetCookie = name: handlerM('a, option(string)) =>
+let tryGetCookie = (name): handlerM('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
     Continue(cookie, req);
   };
 
 let getCookie =
-    (
-      ~onMissing: handlerM('a, string),
-      name,
-    )
-    : handlerM('a, string) =>
+    (~onMissing: handlerM('a, string), name): handlerM('a, string) =>
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
@@ -101,7 +97,7 @@ let getCookie =
     };
 
 let createServerM = (handleFunc: handlerM('a, 'b)) =>
-                                                    [@bs] (req, res) => {
+  (. req, res) => {
     let response = Response.from_native_response(res);
     switch (handleFunc((), Request.from_native_request(req))) {
     | CannotHandle => ()
