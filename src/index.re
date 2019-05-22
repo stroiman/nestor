@@ -6,18 +6,19 @@ module Request = {
 
   let getCookie = (name, req) => req.cookies->Js.Dict.get(name);
 
-  let from_native_request = (req: Http.Request.t) => {
-    let url = Http.Request.url(req) |> Http.Url.parse;
+  let from_native_request = req => {
+    open NodeModules;
+    let url = Http.Request.url(req) |> Url.parse;
     let headers = Http.Request.headers(req);
     let cookies =
       headers->Js.Dict.get("cookie")
       |> (
         fun
-        | Some(x) => Http.Cookie.parse(x)
+        | Some(x) => Cookie.parse(x)
         | None => Js.Dict.empty()
       );
     let path =
-      Http.Url.path(url)
+      Url.path(url)
       |> Js.String.split("/")
       |> Array.to_list
       |> List.filter(x => x != "");
@@ -27,11 +28,14 @@ module Request = {
 };
 
 module Response = {
-  type t = {httpResponse: Http.Response.t};
+  type t = {httpResponse: NodeModules.Http.Response.t};
 
-  let from_native_response = (res: Http.Response.t) => {httpResponse: res};
+  let from_native_response = (res: NodeModules.Http.Response.t) => {
+    httpResponse: res,
+  };
 
-  let send = (str, t) => t.httpResponse |> Http.Response.end_(str);
+  let send = (str, t) =>
+    t.httpResponse |> NodeModules.Http.Response.end_(str);
 };
 
 module Handler = {
@@ -96,7 +100,7 @@ let getCookie =
     | None => Stop(x, y => onMissing(y, req))
     };
 
-let createServerM = (handleFunc: handlerM('a, 'b)) =>
+let createServerM = handleFunc =>
   (. req, res) => {
     let response = Response.from_native_response(res);
     switch (handleFunc((), Request.from_native_request(req))) {

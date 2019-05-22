@@ -9,9 +9,11 @@ module Error = {
   type t = Js.Exn.t;
 };
 type t;
-type errorCallback = (Js.null(Error.t), Http.Response.t) => unit;
-[@bs.module] external request: Http.requestListener => t = "supertest";
-[@bs.module "supertest"] external agent: Http.requestListener => t = "";
+type errorCallback = (Js.null(Error.t), NodeModules.Http.Response.t) => unit;
+[@bs.module]
+external request: NodeModules.Http.requestListener => t = "supertest";
+[@bs.module "supertest"]
+external agent: NodeModules.Http.requestListener => t = "";
 [@bs.send.pipe: t] external get: string => t = "get";
 [@bs.send.pipe: t] external set: (string, string) => t = "set";
 [@bs.send.pipe: t] external post: string => t = "post";
