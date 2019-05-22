@@ -1,6 +1,9 @@
 # Nestor
 
-Work in progress web server framework for BuckleScript/ReasonML
+Work in progress web server framework for BuckleScript/ReasonML that works
+directly on top of the native `http` module in node.js.
+
+Idiomatic stronly typed FP code is prioritized over run-time performance.
 
 ## Motivation
 
@@ -16,8 +19,9 @@ composition.
 
 ## Intended API
 
-This library is not coded yet, but the vision is that you should be able to
-create an app in this style:
+This is only work in progress.
+
+The following only represents an _intent_ of the usage of this library.
 
 ```reasonml
 let findUser = (id, request) => {
@@ -44,3 +48,64 @@ let application = router [
   path("/private") >=> ensureAuthentication >=> privateRouter
 ]
 ```
+
+## Fundamentals
+
+### Middleware
+
+The fundamental type in this library is the 'middleware' poorly named as this
+also refer to the parts that generate a response.
+
+The middleware has the type;
+
+```reasonml
+type middleware('a, 'b) = 'a => request => response('b)
+```
+
+So you can receive some data of type `'a` from the previous middleware - and you
+could pass some data of type `'b` to the next middelware.
+
+Due to the asynchronous nature of node.js, the `response` allows for both
+asynchronous and synchronous responses.
+
+This structure allows easy composition of parts using kleisli composition, the
+result being a middleware too.
+
+### Creating an HTTP server
+
+As the web server is just a composition of middlewares, and a composition of
+middlewares is in itself just a middleware, we just need to serve a middleware.
+
+the function `createServer` takes a middleware and returns an
+`http.requestListener` function, that works directly with the native `http` module.
+
+``` reasonml
+let middleware = path("path") >=> sendText("Hello from /path");
+let server = createServerM(middleware);
+
+%raw
+{|
+const http = require('http');
+const httpServer = http.createServer(server);
+httpServer.listen(4000);
+|};
+```
+
+I've combined this with raw js code to make it explicit how this integrates to
+the native http module.
+
+## Inspiration
+
+This library is slightly inspired by Suave, but with some important changes.
+Suave allows the library to store data in a `Context` object. As you retrieve
+data, you need to dynamically cast to the expected type, and the .net runtime
+would verify type compatibility (throwing an exception if it doesn't )
+
+This solution is not idiomatic in a strongly typed functional programming language.
+
+But it gets even worse with ReasonML/OCaml. The compiler uses the type system
+for type checking, but type information is removed from the compiled code.
+
+Because of that, the system cannot verify the type at
+runtime, so a type mismatch would lead to some very, very, very nasty bugs down
+the line.
