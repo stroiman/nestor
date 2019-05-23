@@ -15,7 +15,7 @@ let middleware =
     sendText("Not found"),
   ]);
 
-let server = createServerM(middleware);
+let server = createServer(middleware);
 
 %raw
 {|

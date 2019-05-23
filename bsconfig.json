@@ -8,6 +8,9 @@
     "dir" : "tests",
     "subdirs" : true,
     "type": "dev"
+  }, {
+    "dir": "examples",
+    "type": "dev"
   }],
   "package-specs": {
     "module": "commonjs",
