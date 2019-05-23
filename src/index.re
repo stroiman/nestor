@@ -41,9 +41,6 @@ module Response = {
 };
 
 module Handler = {
-  type syncResponse('a) =
-    | CannotHandle;
-
   type response('a) =
     | CannotHandle: response('a)
     | Response(Response.t => Response.t): response('a)
@@ -62,12 +59,10 @@ module Handler = {
       | Stop(x, f) => f(x)
       | Async(asyncResult) =>
         Async(
-          (
-            cb =>
-              asyncResult((result: response('a)) =>
-                cb(req |> ((_ => result) >>= f))
-              )
-          ),
+          cb =>
+            asyncResult((result: response('a)) =>
+              cb(req |> ((_ => result) >>= f))
+            ),
         )
       };
 
@@ -78,7 +73,7 @@ module Handler = {
 
 open Handler;
 
-let path = p: handlerM('a, 'a) =>
+let path = (p): handlerM('a, 'a) =>
   (data, req) =>
     Request.(
       switch (req.path) {
@@ -87,9 +82,7 @@ let path = p: handlerM('a, 'a) =>
       }
     );
 
-let foo = Printf.sprintf("Hellos %s %d\n");
-
-let sendText = text: handlerM('a, 'b) =>
+let sendText = (text): handlerM('a, 'b) =>
   (_, _) => Handler.Response(Response.send(text));
 
 let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
@@ -103,7 +96,7 @@ let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
       }
     };
 
-let tryGetCookie = name: handlerM('a, option(string)) =>
+let tryGetCookie = (name): handlerM('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
     Continue(cookie, req);
@@ -114,7 +107,7 @@ let getCookie =
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
-    | None => Stop(x, (fn => onMissing(fn, req)))
+    | None => Stop(x, fn => onMissing(fn, req))
     };
 
 let createServer = handleFunc =>
