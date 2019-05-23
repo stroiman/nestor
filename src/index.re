@@ -6,6 +6,8 @@ module Request = {
 
   let getCookie = (name, req) => req.cookies->Js.Dict.get(name);
 
+  let getPath = _ => "/users/john";
+
   let from_native_request = req => {
     open NodeModules;
     let url = Http.Request.url(req) |> Url.parse;
