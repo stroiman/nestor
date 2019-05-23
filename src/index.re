@@ -35,9 +35,7 @@ module Response = {
 
   let empty = {status: 200, text: ""};
 
-  let send = (str, res) => {
-    {...res, text: str};
-  };
+  let send = (str, res) => {...res, text: str};
 };
 
 module Handler = {
@@ -60,35 +58,36 @@ module Handler = {
       | Response(f) => Response(f)
       | Continue(data, req) => f(data, req)
       | Stop(x, f) => f(x)
-      | Async(x) =>
+      | Async(asyncResult) =>
         Async(
-          (cb: response('b) => unit) =>
-            x((result: response('a)) => {
-              let input: t('a) = (_ => result);
-              let y: t('b) = input >>= f;
-              cb(y(req));
-            }),
+          (
+            cb =>
+              asyncResult((result: response('a)) =>
+                cb(req |> ((_ => result) >>= f))
+              )
+          ),
         )
       };
 
   type handlerM('a, 'b) = 'a => t('b);
 
-  let (>=>) = (f: handlerM('a, 'b), g: handlerM('b, 'c)): handlerM('a, 'c) =>
-    (x) => (f(x) >>= g: t('c));
+  let (>=>) = (f, g, x) => f(x) >>= g;
 };
 
 open Handler;
 
-let path = (p): handlerM('a, 'a) =>
+let path = p: handlerM('a, 'a) =>
   (data, req) =>
     Request.(
       switch (req.path) {
-      | [x, ..._] when x == p => Continue(data, req)
+      | [x, ...xs] when x == p => Continue(data, {...req, path: xs})
       | _ => CannotHandle
       }
     );
 
-let sendText = (text): handlerM('a, 'b) =>
+let foo = Printf.sprintf("Hellos %s %d\n");
+
+let sendText = text: handlerM('a, 'b) =>
   (_, _) => Handler.Response(Response.send(text));
 
 let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
@@ -102,7 +101,7 @@ let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
       }
     };
 
-let tryGetCookie = (name): handlerM('a, option(string)) =>
+let tryGetCookie = name: handlerM('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
     Continue(cookie, req);
@@ -113,21 +112,24 @@ let getCookie =
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
-    | None => Stop(x, __x => onMissing(__x, req))
+    | None => Stop(x, (fn => onMissing(fn, req)))
     };
 
 let createServer = handleFunc =>
   (. req, res) => {
-    let rec handleResponse = response => {
+    let rec handleResponse = response =>
       switch (response) {
-      | CannotHandle => ()
+      | CannotHandle =>
+        /* If the handler cannot handle the request, then doing nothing might
+           be the most sensible thing to do, as other request handlers could have
+           been attached to the http server. */
+        ()
       | Continue(_) => ()
       | Response(handler) =>
         let r = handler(Response.empty);
         res |> NodeModules.Http.Response.end_(r.text);
-      | Stop(_x, _f) => ()
+      | Stop(x, f) => handleResponse(f(x))
       | Async(cb) => cb(handleResponse)
       };
-    };
     handleResponse(handleFunc((), Request.from_native_request(req)));
   };
