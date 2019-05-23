@@ -30,12 +30,10 @@ module Request = {
 module Response = {
   type t = {
     status: int,
-    text: string};
-
-  let empty = {
-    status: 200,
-    text: ""
+    text: string,
   };
+
+  let empty = {status: 200, text: ""};
 
   let send = (str, res) => {
     {...res, text: str};
@@ -50,17 +48,27 @@ module Handler = {
     | CannotHandle: response('a)
     | Response(Response.t => Response.t): response('a)
     | Continue('a, Request.t): response('a)
-    | Stop('b, 'b => response('a)): response('a);
+    | Stop('b, 'b => response('a)): response('a)
+    | Async((response('a) => unit) => unit): response('a);
 
   type t('a) = Request.t => response('a);
 
-  let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
+  let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     req =>
       switch (x(req)) {
       | CannotHandle => CannotHandle
       | Response(f) => Response(f)
       | Continue(data, req) => f(data, req)
       | Stop(x, f) => f(x)
+      | Async(x) =>
+        Async(
+          (cb: response('b) => unit) =>
+            x((result: response('a)) => {
+              let input: t('a) = (_ => result);
+              let y: t('b) = input >>= f;
+              cb(y(req));
+            }),
+        )
       };
 
   type handlerM('a, 'b) = 'a => t('b);
@@ -105,17 +113,22 @@ let getCookie =
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
-    | None => Stop(x, y => onMissing(y, req))
+    | None => Stop(x, __x => onMissing(__x, req))
     };
 
-let createServerM = handleFunc =>
+let createServerM = handleFunc => {
   (. req, res) => {
-    switch (handleFunc((), Request.from_native_request(req))) {
-    | CannotHandle => ()
-    | Continue(_) => ()
-    | Response(handler) =>
-      let r = handler(Response.empty);
-      res |> NodeModules.Http.Response.end_(r.text);
-    | Stop(_x, _f) => ()
+    let rec handleResponse = response => {
+      switch (response) {
+      | CannotHandle => ()
+      | Continue(_) => ()
+      | Response(handler) =>
+        let r = handler(Response.empty);
+        res |> NodeModules.Http.Response.end_(r.text);
+      | Stop(_x, _f) => ()
+      | Async(cb) => cb(handleResponse)
+      };
     };
+    handleResponse(handleFunc((), Request.from_native_request(req)));
   };
+};
