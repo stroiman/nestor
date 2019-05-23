@@ -10,7 +10,7 @@ describe(
         getCookie("Auth", ~onMissing=sendText("Missing Cookie"))
         >=> (cookie => sendText("Hello, " ++ cookie, ()));
 
-      Supertest.request(createServerM(handler))
+      Supertest.request(createServer(handler))
       |> Supertest.get("/b")
       |> Supertest.set("cookie", "Auth=John")
       |> Supertest.expectStatus(200)

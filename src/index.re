@@ -116,7 +116,7 @@ let getCookie =
     | None => Stop(x, __x => onMissing(__x, req))
     };
 
-let createServerM = handleFunc => {
+let createServer = handleFunc =>
   (. req, res) => {
     let rec handleResponse = response => {
       switch (response) {
@@ -131,4 +131,3 @@ let createServerM = handleFunc => {
     };
     handleResponse(handleFunc((), Request.from_native_request(req)));
   };
-};

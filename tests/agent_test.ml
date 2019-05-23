@@ -7,12 +7,12 @@ let router = choose [
     path "b" >=> sendText "Got B";
   ]
 
-let server2 = createServerM(router)
+let server2 = createServer(router)
 ;;
 
 describe "Server" [
   it "starts with a failing test" (fun _ ->
-      let h = createServerM(sendText "Hello, World!") in
+      let h = createServer(sendText "Hello, World!") in
       Supertest.request(h)
       |> Supertest.get("/")
       |> Supertest.expectStatus(200)
@@ -43,7 +43,7 @@ describe "Server" [
         >=>
         (fun (cookie) -> sendText("Hello, " ^ cookie) ())
       in
-      Supertest.request(createServerM(handler))
+      Supertest.request(createServer(handler))
       |> Supertest.get("/b")
       |> Supertest.expectStatus(200)
       |> Supertest.expectBody("Missing Cookie")
@@ -57,7 +57,7 @@ describe "Server" [
         >=>
         (fun (cookie) -> sendText("Hello, " ^ cookie) ())
       in
-      Supertest.request(createServerM(handler))
+      Supertest.request(createServer(handler))
       |> Supertest.get("/b")
       |> Supertest.set "cookie" "Auth=John"
       |> Supertest.expectStatus(200)
