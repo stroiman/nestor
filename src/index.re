@@ -40,40 +40,36 @@ module Response = {
   let send = (str, res) => {...res, text: str};
 };
 
-module Handler = {
-  type response('a) =
-    | CannotHandle: response('a)
-    | Response(Response.t => Response.t): response('a)
-    | Continue('a, Request.t): response('a)
-    | Stop('b, 'b => response('a)): response('a)
-    | Async((response('a) => unit) => unit): response('a);
+/** Reresents the result of a middleware action */
+type httpResult('a) =
+  | CannotHandle
+  | Done(Response.t => Response.t)
+  | Continue('a, Request.t)
+  | Stop(httpResult('a))
+  | Async((httpResult('a) => unit) => unit);
 
-  type t('a) = Request.t => response('a);
+module Handler = {
+  type t('a) = Request.t => httpResult('a);
 
   let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     req =>
       switch (x(req)) {
       | CannotHandle => CannotHandle
-      | Response(f) => Response(f)
+      | Done(f) => Done(f)
       | Continue(data, req) => f(data, req)
-      | Stop(x, f) => f(x)
+      | Stop(x) => x
       | Async(asyncResult) =>
         Async(
-          cb =>
-            asyncResult((result: response('a)) =>
-              cb(req |> ((_ => result) >>= f))
-            ),
+          (cb => asyncResult(result => cb(req |> ((_ => result) >>= f)))),
         )
       };
-
-  type handlerM('a, 'b) = 'a => t('b);
 
   let (>=>) = (f, g, x) => f(x) >>= g;
 };
 
-open Handler;
+type middleware('a, 'b) = 'a => Handler.t('b);
 
-let path = (p): handlerM('a, 'a) =>
+let path = p: middleware('a, 'a) =>
   (data, req) =>
     Request.(
       switch (req.path) {
@@ -82,32 +78,31 @@ let path = (p): handlerM('a, 'a) =>
       }
     );
 
-let sendText = (text): handlerM('a, 'b) =>
-  (_, _) => Handler.Response(Response.send(text));
+let sendText = text: middleware('a, 'b) =>
+  (_, _) => Done(Response.send(text));
 
-let rec choose = (routes: list(handlerM('a, 'b))): handlerM('a, 'b) =>
-  (z: 'a, req) =>
-    switch (routes) {
-    | [] => CannotHandle
-    | [x, ...xs] =>
-      switch (x(z, req)) {
-      | CannotHandle => choose(xs, z, req)
-      | x => x
-      }
-    };
+let rec choose = (routes, data, req) =>
+  switch (routes) {
+  | [] => CannotHandle
+  | [x, ...xs] =>
+    switch (x(data, req)) {
+    | CannotHandle => choose(xs, data, req)
+    | x => x
+    }
+  };
 
-let tryGetCookie = (name): handlerM('a, option(string)) =>
+let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
     Continue(cookie, req);
   };
 
 let getCookie =
-    (~onMissing: handlerM('a, string), name): handlerM('a, string) =>
+    (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
-    | None => Stop(x, fn => onMissing(fn, req))
+    | None => Stop(onMissing(x, req))
     };
 
 let createServer = handleFunc =>
@@ -119,11 +114,13 @@ let createServer = handleFunc =>
            be the most sensible thing to do, as other request handlers could have
            been attached to the http server. */
         ()
-      | Continue(_) => ()
-      | Response(handler) =>
+      | Continue(_) =>
+        /* Should probably result in a HTTP 500 status - the server code is misconfigured */
+        ()
+      | Done(handler) =>
         let r = handler(Response.empty);
         res |> NodeModules.Http.Response.end_(r.text);
-      | Stop(x, f) => handleResponse(f(x))
+      | Stop(x) => handleResponse(x)
       | Async(cb) => cb(handleResponse)
       };
     handleResponse(handleFunc((), Request.from_native_request(req)));
