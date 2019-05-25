@@ -1,12 +1,12 @@
 module Request = {
   type t = {
     cookies: Js.Dict.t(string),
-    path: list(string),
+    path: string,
   };
 
   let getCookie = (name, req) => req.cookies->Js.Dict.get(name);
 
-  let getPath = _ => "/users/john";
+  let getPath = req => req.path;
 
   let from_native_request = req => {
     open NodeModules;
@@ -19,11 +19,12 @@ module Request = {
         | Some(x) => Cookie.parse(x)
         | None => Js.Dict.empty()
       );
-    let path =
-      Url.path(url)
+    let path = Url.path(url);
+    /*
       |> Js.String.split("/")
-      |> Array.to_list
-      |> List.filter(x => x != "");
+     |> Array.to_list
+     |> List.filter(x => x != "");
+      */
 
     {path, cookies};
   };
@@ -69,14 +70,16 @@ module Handler = {
 
 type middleware('a, 'b) = 'a => Handler.t('b);
 
-let path = p: middleware('a, 'a) =>
-  (data, req) =>
-    Request.(
-      switch (req.path) {
-      | [x, ...xs] when x == p => Continue(data, {...req, path: xs})
-      | _ => CannotHandle
-      }
-    );
+let path = searchPath: middleware('a, 'a) =>
+  (data, req) => {
+    open Request;
+    let requestPath = req |> getPath;
+    let length = Js.String.length(searchPath);
+    let newPath = Js.String.substr(~from=length, requestPath);
+    Js.String.startsWith(searchPath, requestPath)
+    && Js.String.startsWith("/", requestPath) ?
+      Continue(data, {...req, path: newPath}) : CannotHandle;
+  };
 
 let sendText = text: middleware('a, 'b) =>
   (_, _) => Done(Response.send(text));

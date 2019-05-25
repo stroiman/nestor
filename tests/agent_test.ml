@@ -3,8 +3,10 @@ open Index
 open Index.Handler
 
 let router = choose [
-    path "a" >=> sendText "Got A";
-    path "b" >=> sendText "Got B";
+    path "/a" >=> sendText "Got A";
+    path "/b" >=> sendText "Got B";
+    path "/c/a" >=> sendText "Got CA";
+    path "/c" >=> path "/b" >=> sendText "Got CB";
   ]
 
 let server2 = createServer(router)
@@ -33,6 +35,22 @@ describe "Server" [
       |> Supertest.get("/b")
       |> Supertest.expectStatus(200)
       |> Supertest.expectBody("Got B")
+      |> Supertest.endAsync
+    );
+
+  it "Routes /c/a" (fun _ ->
+      Supertest.request(server2)
+      |> Supertest.get("/c/a")
+      |> Supertest.expectStatus(200)
+      |> Supertest.expectBody("Got CA")
+      |> Supertest.endAsync
+    );
+
+  it "Routes /c/b" (fun _ ->
+      Supertest.request(server2)
+      |> Supertest.get("/c/b")
+      |> Supertest.expectStatus(200)
+      |> Supertest.expectBody("Got CB")
       |> Supertest.endAsync
     );
 
