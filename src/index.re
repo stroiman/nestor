@@ -46,7 +46,6 @@ type httpResult('a) =
   | CannotHandle
   | Done(Response.t => Response.t)
   | Continue('a, Request.t)
-  | Stop(httpResult('a))
   | Async((httpResult('a) => unit) => unit);
 
 module Handler = {
@@ -58,7 +57,6 @@ module Handler = {
       | CannotHandle => CannotHandle
       | Done(f) => Done(f)
       | Continue(data, req) => f(data, req)
-      | Stop(x) => x
       | Async(asyncResult) =>
         Async(
           (cb => asyncResult(result => cb(req |> ((_ => result) >>= f)))),
@@ -105,7 +103,7 @@ let getCookie =
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => Continue(cookie, req)
-    | None => Stop(onMissing(x, req))
+    | None => onMissing(x, req)
     };
 
 let createServer = handleFunc =>
@@ -123,7 +121,6 @@ let createServer = handleFunc =>
       | Done(handler) =>
         let r = handler(Response.empty);
         res |> NodeModules.Http.Response.end_(r.text);
-      | Stop(x) => handleResponse(x)
       | Async(cb) => cb(handleResponse)
       };
     handleResponse(handleFunc((), Request.from_native_request(req)));
