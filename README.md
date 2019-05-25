@@ -8,10 +8,10 @@ Idiomatic stronly typed FP code is prioritized over run-time performance.
 ## Motivation
 
 Currently, if you want to write a bucklescript-based back-end, the most viable
-option is to use `express`, or
+is to use bucklescript bindings to existing node.js frameworks, like `express`.
 
-None of these frameworks follow a functional idioms. E.g., when using express, it
-is quite idiomatic to write middlewares that mutate the `Request` object.
+Unfortunately, express is not geared towards functional programming paradigms, e.g.
+it is quite idiomatic to write middlewares that mutate the `Request` object.
 
 The philosophy of this framework is that a middleware doesn't mutate the
 context, but passes data on to the next middleware using monadic/kleisli
@@ -81,7 +81,7 @@ the function `createServer` takes a middleware and returns an
 
 ``` reasonml
 let middleware = path("path") >=> sendText("Hello from /path");
-let server = createServerM(middleware);
+let server = createServer(middleware);
 
 %raw
 {|
