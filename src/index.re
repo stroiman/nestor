@@ -84,12 +84,12 @@ let path = searchPath: middleware('a, 'a) =>
 let sendText = text: middleware('a, 'b) =>
   (_, _) => Done(Response.send(text));
 
-let rec choose = (routes, data, req) =>
+let rec router = (routes, data, req) =>
   switch (routes) {
   | [] => CannotHandle
   | [x, ...xs] =>
     switch (x(data, req)) {
-    | CannotHandle => choose(xs, data, req)
+    | CannotHandle => router(xs, data, req)
     | x => x
     }
   };

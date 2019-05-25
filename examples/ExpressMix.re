@@ -13,7 +13,7 @@ open Index.Handler;
 
 let middleware =
   path("nestor")
-  >=> choose([
+  >=> router([
         path("a") >=> sendText("Hello from /nestor/a"),
         path("b") >=> sendText("Hello from /nestor/b"),
         sendText("Hello from /nestor"),

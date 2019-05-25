@@ -2,7 +2,7 @@ open RespectWrapper.Dsl.Resync
 open Index
 open Index.Handler
 
-let router = choose [
+let router = router [
     path "/a" >=> sendText "Got A";
     path "/b" >=> sendText "Got B";
     path "/c/a" >=> sendText "Got CA";
