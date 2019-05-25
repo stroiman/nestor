@@ -1,10 +1,10 @@
 open Index;
 open Index.Handler;
 
-[@bs.val] external setTimeout: (unit => unit, int) => float = "setTimeout";
-
 let delay = (x, req) =>
-  Async(cb => setTimeout(() => cb(Continue(x, req)), 1000) |> ignore);
+  Async(
+    cb => Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore,
+  );
 
 let middleware =
   choose([
