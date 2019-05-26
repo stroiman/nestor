@@ -20,11 +20,6 @@ module Request = {
         | None => Js.Dict.empty()
       );
     let path = Url.path(url);
-    /*
-      |> Js.String.split("/")
-     |> Array.to_list
-     |> List.filter(x => x != "");
-      */
 
     {path, cookies};
   };
