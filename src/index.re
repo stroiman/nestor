@@ -54,10 +54,7 @@ module Handler = {
       cb =>
         asyncResult(
           fun
-          | Continue(x, req) => {
-              let y = f(x, req);
-              y(cb);
-            }
+          | Continue(x, req) => f(x, req, cb)
           | x => cb(x),
         );
     };
@@ -82,22 +79,17 @@ let path = searchPath: middleware('a, 'a) =>
 
 let sendText = (text, _, cb) => cb(Done(Response.send(text)));
 
-let rec router = (routes, data, req) =>
+let rec router = (routes, data, req, cb) =>
   switch (routes) {
-  | [] => (cb => cb(CannotHandle))
-  | [x, ...xs] =>
-    let cb = x(data, req);
-    (
-      cb2 =>
-        cb(
-          fun
-          | CannotHandle => {
-              let y = router(xs, data, req);
-              y(cb2);
-            }
-          | x => cb2(x),
-        )
-    );
+  | [] => cb(CannotHandle)
+  | [route, ...routes] =>
+    route(
+      data,
+      req,
+      fun
+      | CannotHandle => router(routes, data, req, cb)
+      | x => cb(x),
+    )
   };
 
 let tryGetCookie = name: middleware('a, option(string)) =>
@@ -116,8 +108,10 @@ let getCookie =
 
 let createServer = (handleFunc: middleware('a, 'b)) =>
   (. req, res) => {
-    let rec handleSyncResponse = response =>
-      switch (response) {
+    let req = Request.from_native_request(req);
+    let result = handleFunc((), req);
+    result(
+      fun
       | CannotHandle =>
         /* If the handler cannot handle the request, then doing nothing might
            be the most sensible thing to do, as other request handlers could have
@@ -126,10 +120,9 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
       | Continue(_) =>
         /* Should probably result in a HTTP 500 status - the server code is misconfigured */
         ()
-      | Done(handler) =>
-        let r = handler(Response.empty);
-        res |> NodeModules.Http.Response.end_(r.text);
-      };
-    let rec handleAsyncResponse = response => response(handleSyncResponse);
-    handleAsyncResponse(handleFunc((), Request.from_native_request(req)));
+      | Done(handler) => {
+          let r = handler(Response.empty);
+          res |> NodeModules.Http.Response.end_(r.text);
+        },
+    );
   };
