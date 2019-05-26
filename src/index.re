@@ -45,16 +45,16 @@ type httpResultx('a) =
 type httpResult('a) = (httpResultx('a) => unit) => unit;
 
 module Handler = {
-  type t('a) = Request.t => httpResult('a);
+  type t('a) = (Request.t, Response.t) => httpResult('a);
   type m('a, 'b) = 'a => t('b);
 
   let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
-    req => {
-      let asyncResult = x(req);
+    (req, res) => {
+      let asyncResult = x(req, res);
       cb =>
         asyncResult(
           fun
-          | Continue(x, req) => f(x, req, cb)
+          | Continue(x, req) => f(x, req, res, cb)
           | x => cb(x),
         );
     };
@@ -65,7 +65,7 @@ module Handler = {
 type middleware('a, 'b) = 'a => Handler.t('b);
 
 let path = searchPath: middleware('a, 'a) =>
-  (data, req) => {
+  (data, req, res, cb) => {
     open Request;
     open Js;
     let requestPath = req |> getPath;
@@ -73,43 +73,43 @@ let path = searchPath: middleware('a, 'a) =>
     let newPath = String.substr(~from=length, requestPath);
     String.startsWith(searchPath, requestPath)
     && String.startsWith("/", requestPath) ?
-      cb => cb(Continue(data, {...req, path: newPath})) :
-      (cb => cb(CannotHandle));
+      cb(Continue(data, {...req, path: newPath})) : cb(CannotHandle);
   };
 
-let sendText = (text, _, cb) => cb(Done(Response.send(text)));
+let sendText = (text, _, _, cb) => cb(Done(Response.send(text)));
 
-let rec router = (routes, data, req, cb) =>
+let rec router = (routes, data, req, res, cb) =>
   switch (routes) {
   | [] => cb(CannotHandle)
   | [route, ...routes] =>
     route(
       data,
       req,
+      res,
       fun
-      | CannotHandle => router(routes, data, req, cb)
+      | CannotHandle => router(routes, data, req, res, cb)
       | x => cb(x),
     )
   };
 
 let tryGetCookie = name: middleware('a, option(string)) =>
-  (_, req) => {
+  (_, req, res, cb) => {
     let cookie = Request.getCookie(name, req);
-    cb => cb(Continue(cookie, req));
+    cb(Continue(cookie, req));
   };
 
 let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
-  (x: 'a, req) =>
+  (x: 'a, req, res) =>
     switch (Request.getCookie(name, req)) {
     | Some(cookie) => (cb => cb(Continue(cookie, req)))
-    | None => onMissing(x, req)
+    | None => onMissing(x, req, res)
     };
 
 let createServer = (handleFunc: middleware('a, 'b)) =>
   (. req, res) => {
     let req = Request.from_native_request(req);
-    let result = handleFunc((), req);
+    let result = handleFunc((), req, Response.empty);
     result(
       fun
       | CannotHandle =>

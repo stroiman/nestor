@@ -1,7 +1,7 @@
 open Index;
 open Index.Handler;
 
-let delay = (x, req, cb) =>
+let delay = (x, req, _res, cb) =>
   Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore;
 
 let middleware =
