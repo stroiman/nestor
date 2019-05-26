@@ -1,10 +1,8 @@
 open Index;
 open Index.Handler;
 
-let delay = (x, req) =>
-  Async(
-    cb => Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore,
-  );
+let delay = (x, req, cb) =>
+  Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore;
 
 let middleware =
   router([

@@ -42,32 +42,25 @@ type httpResultx('a) =
   | Done(Response.t => Response.t)
   | Continue('a, Request.t);
 
-type httpResult('a) =
-  | Async((httpResultx('a) => unit) => unit);
+type httpResult('a) = (httpResultx('a) => unit) => unit;
 
 module Handler = {
   type t('a) = Request.t => httpResult('a);
   type m('a, 'b) = 'a => t('b);
 
   let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
-    req =>
-      switch (x(req)) {
-      | Async(asyncResult) =>
-        Async(
-          (
-            cb =>
-              asyncResult(
-                fun
-                | Continue(x, req) =>
-                  switch (f(x, req)) {
-                  | Async(x) => x(cb)
-                  }
-                | x => cb(x),
-                /* result => cb(req |> ((_ => result) >>= f)) */
-              )
-          ),
-        )
-      };
+    req => {
+      let asyncResult = x(req);
+      cb =>
+        asyncResult(
+          fun
+          | Continue(x, req) => {
+              let y = f(x, req);
+              y(cb);
+            }
+          | x => cb(x),
+        );
+    };
 
   let (>=>) = (f: m('a, 'b), g: m('b, 'c), x: 'a): t('c) => f(x) >>= g;
 };
@@ -83,45 +76,41 @@ let path = searchPath: middleware('a, 'a) =>
     let newPath = String.substr(~from=length, requestPath);
     String.startsWith(searchPath, requestPath)
     && String.startsWith("/", requestPath) ?
-      Async(cb => cb(Continue(data, {...req, path: newPath}))) :
-      Async(cb => cb(CannotHandle));
+      cb => cb(Continue(data, {...req, path: newPath})) :
+      (cb => cb(CannotHandle));
   };
 
-let sendText = (text, _) => Async(cb => cb(Done(Response.send(text))));
+let sendText = (text, _, cb) => cb(Done(Response.send(text)));
 
 let rec router = (routes, data, req) =>
   switch (routes) {
-  | [] => Async((cb => cb(CannotHandle)))
+  | [] => (cb => cb(CannotHandle))
   | [x, ...xs] =>
-    switch (x(data, req)) {
-    | Async(cb) =>
-      Async(
-        (
-          cb2 =>
-            cb(
-              fun
-              | CannotHandle =>
-                switch (router(xs, data, req)) {
-                | Async(x) => x(cb2)
-                }
-              | x => cb2(x),
-            )
-        ),
-      )
-    }
+    let cb = x(data, req);
+    (
+      cb2 =>
+        cb(
+          fun
+          | CannotHandle => {
+              let y = router(xs, data, req);
+              y(cb2);
+            }
+          | x => cb2(x),
+        )
+    );
   };
 
 let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
-    Async(cb => cb(Continue(cookie, req)));
+    cb => cb(Continue(cookie, req));
   };
 
 let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
-    | Some(cookie) => Async((cb => cb(Continue(cookie, req))))
+    | Some(cookie) => (cb => cb(Continue(cookie, req)))
     | None => onMissing(x, req)
     };
 
@@ -141,9 +130,6 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
         let r = handler(Response.empty);
         res |> NodeModules.Http.Response.end_(r.text);
       };
-    let rec handleAsyncResponse = response =>
-      switch (response) {
-      | Async(x) => x(handleSyncResponse)
-      };
+    let rec handleAsyncResponse = response => response(handleSyncResponse);
     handleAsyncResponse(handleFunc((), Request.from_native_request(req)));
   };
