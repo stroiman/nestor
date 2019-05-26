@@ -43,7 +43,6 @@ type httpResultx('a) =
   | Continue('a, Request.t);
 
 type httpResult('a) =
-  | Sync(httpResultx('a))
   | Async((httpResultx('a) => unit) => unit);
 
 module Handler = {
@@ -53,8 +52,6 @@ module Handler = {
   let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     req =>
       switch (x(req)) {
-      | Sync(Continue(data, req)) => f(data, req)
-      | Sync(x) => Sync(x)
       | Async(asyncResult) =>
         Async(
           (
@@ -63,7 +60,6 @@ module Handler = {
                 fun
                 | Continue(x, req) =>
                   switch (f(x, req)) {
-                  | Sync(x) => cb(x)
                   | Async(x) => x(cb)
                   }
                 | x => cb(x),
@@ -87,32 +83,45 @@ let path = searchPath: middleware('a, 'a) =>
     let newPath = String.substr(~from=length, requestPath);
     String.startsWith(searchPath, requestPath)
     && String.startsWith("/", requestPath) ?
-      Sync(Continue(data, {...req, path: newPath})) : Sync(CannotHandle);
+      Async(cb => cb(Continue(data, {...req, path: newPath}))) :
+      Async(cb => cb(CannotHandle));
   };
 
-let sendText = (text, _) => Sync(Done(Response.send(text)));
+let sendText = (text, _) => Async(cb => cb(Done(Response.send(text))));
 
 let rec router = (routes, data, req) =>
   switch (routes) {
-  | [] => Sync(CannotHandle)
+  | [] => Async((cb => cb(CannotHandle)))
   | [x, ...xs] =>
     switch (x(data, req)) {
-    | Sync(CannotHandle) => router(xs, data, req)
-    | x => x
+    | Async(cb) =>
+      Async(
+        (
+          cb2 =>
+            cb(
+              fun
+              | CannotHandle =>
+                switch (router(xs, data, req)) {
+                | Async(x) => x(cb2)
+                }
+              | x => cb2(x),
+            )
+        ),
+      )
     }
   };
 
 let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
-    Sync(Continue(cookie, req));
+    Async(cb => cb(Continue(cookie, req)));
   };
 
 let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
-    | Some(cookie) => Sync(Continue(cookie, req))
+    | Some(cookie) => Async((cb => cb(Continue(cookie, req))))
     | None => onMissing(x, req)
     };
 
@@ -134,7 +143,6 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
       };
     let rec handleAsyncResponse = response =>
       switch (response) {
-      | Sync(x) => handleSyncResponse(x)
       | Async(x) => x(handleSyncResponse)
       };
     handleAsyncResponse(handleFunc((), Request.from_native_request(req)));
