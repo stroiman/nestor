@@ -37,28 +37,43 @@ module Response = {
 };
 
 /** Reresents the result of a middleware action */
-type httpResult('a) =
+type httpResultx('a) =
   | CannotHandle
   | Done(Response.t => Response.t)
-  | Continue('a, Request.t)
-  | Async((httpResult('a) => unit) => unit);
+  | Continue('a, Request.t);
+
+type httpResult('a) =
+  | Sync(httpResultx('a))
+  | Async((httpResultx('a) => unit) => unit);
 
 module Handler = {
   type t('a) = Request.t => httpResult('a);
+  type m('a, 'b) = 'a => t('b);
 
   let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     req =>
       switch (x(req)) {
-      | CannotHandle => CannotHandle
-      | Done(f) => Done(f)
-      | Continue(data, req) => f(data, req)
+      | Sync(Continue(data, req)) => f(data, req)
+      | Sync(x) => Sync(x)
       | Async(asyncResult) =>
         Async(
-          (cb => asyncResult(result => cb(req |> ((_ => result) >>= f)))),
+          (
+            cb =>
+              asyncResult(
+                fun
+                | Continue(x, req) =>
+                  switch (f(x, req)) {
+                  | Sync(x) => cb(x)
+                  | Async(x) => x(cb)
+                  }
+                | x => cb(x),
+                /* result => cb(req |> ((_ => result) >>= f)) */
+              )
+          ),
         )
       };
 
-  let (>=>) = (f, g, x) => f(x) >>= g;
+  let (>=>) = (f: m('a, 'b), g: m('b, 'c), x: 'a): t('c) => f(x) >>= g;
 };
 
 type middleware('a, 'b) = 'a => Handler.t('b);
@@ -72,17 +87,17 @@ let path = searchPath: middleware('a, 'a) =>
     let newPath = String.substr(~from=length, requestPath);
     String.startsWith(searchPath, requestPath)
     && String.startsWith("/", requestPath) ?
-      Continue(data, {...req, path: newPath}) : CannotHandle;
+      Sync(Continue(data, {...req, path: newPath})) : Sync(CannotHandle);
   };
 
-let sendText = (text, _) => Done(Response.send(text));
+let sendText = (text, _) => Sync(Done(Response.send(text)));
 
 let rec router = (routes, data, req) =>
   switch (routes) {
-  | [] => CannotHandle
+  | [] => Sync(CannotHandle)
   | [x, ...xs] =>
     switch (x(data, req)) {
-    | CannotHandle => router(xs, data, req)
+    | Sync(CannotHandle) => router(xs, data, req)
     | x => x
     }
   };
@@ -90,20 +105,20 @@ let rec router = (routes, data, req) =>
 let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req) => {
     let cookie = Request.getCookie(name, req);
-    Continue(cookie, req);
+    Sync(Continue(cookie, req));
   };
 
 let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req) =>
     switch (Request.getCookie(name, req)) {
-    | Some(cookie) => Continue(cookie, req)
+    | Some(cookie) => Sync(Continue(cookie, req))
     | None => onMissing(x, req)
     };
 
-let createServer = handleFunc =>
+let createServer = (handleFunc: middleware('a, 'b)) =>
   (. req, res) => {
-    let rec handleResponse = response =>
+    let rec handleSyncResponse = response =>
       switch (response) {
       | CannotHandle =>
         /* If the handler cannot handle the request, then doing nothing might
@@ -116,7 +131,11 @@ let createServer = handleFunc =>
       | Done(handler) =>
         let r = handler(Response.empty);
         res |> NodeModules.Http.Response.end_(r.text);
-      | Async(cb) => cb(handleResponse)
       };
-    handleResponse(handleFunc((), Request.from_native_request(req)));
+    let rec handleAsyncResponse = response =>
+      switch (response) {
+      | Sync(x) => handleSyncResponse(x)
+      | Async(x) => x(handleSyncResponse)
+      };
+    handleAsyncResponse(handleFunc((), Request.from_native_request(req)));
   };
