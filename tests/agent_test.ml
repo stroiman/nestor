@@ -10,62 +10,64 @@ let router = router [
   ]
 
 let server2 = createServer(router)
+
+let test ?expectStatus ?expectBody ~path handler =
+    Supertest.request(handler)
+    |> Supertest.get(path)
+    |> (match expectStatus with
+        | Some(e) -> Supertest.expectStatus(e)
+        | None -> fun x -> x)
+    |> (match expectBody with
+        | Some(e) -> Supertest.expectBody(e)
+        | None -> fun x -> x)
+    |> Supertest.endAsync
 ;;
 
 describe "Server" [
   it "starts with a failing test" (fun _ ->
-      let h = createServer(sendText "Hello, World!") in
-      Supertest.request(h)
-      |> Supertest.get("/")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Hello, World!")
-      |> Supertest.endAsync
+      createServer(sendText "Hello, World!") |> test
+        ~path: "/"
+        ~expectStatus: 200
+        ~expectBody: "Hello, World!"
     );
 
   it "Routes A" (fun _ ->
-      Supertest.request(server2)
-      |> Supertest.get("/a")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Got A")
-      |> Supertest.endAsync
+      server2 |> test
+        ~path: "/a"
+        ~expectStatus: 200
+        ~expectBody: "Got A"
     );
 
   it "Routes B" (fun _ ->
-      Supertest.request(server2)
-      |> Supertest.get("/b")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Got B")
-      |> Supertest.endAsync
+      server2 |> test
+        ~path: "/b"
+        ~expectStatus: 200
+        ~expectBody: "Got B"
     );
 
   it "Routes /c/a" (fun _ ->
-      Supertest.request(server2)
-      |> Supertest.get("/c/a")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Got CA")
-      |> Supertest.endAsync
+      server2 |> test
+        ~path: "/c/a"
+        ~expectStatus: 200
+        ~expectBody: "Got CA"
     );
 
   it "Routes /c/b" (fun _ ->
-      Supertest.request(server2)
-      |> Supertest.get("/c/b")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Got CB")
-      |> Supertest.endAsync
+      server2 |> test
+        ~path: "/c/b"
+        ~expectStatus: 200
+        ~expectBody: "Got CB"
     );
 
   it "Handles cookies - new syntax - missing cookie" (fun _ ->
-      let handler =
-        getCookie "Auth"
-          ~onMissing:(sendText "Missing Cookie")
-        >=>
-        (fun (cookie) -> sendText("Hello, " ^ cookie) ())
-      in
-      Supertest.request(createServer(handler))
-      |> Supertest.get("/b")
-      |> Supertest.expectStatus(200)
-      |> Supertest.expectBody("Missing Cookie")
-      |> Supertest.endAsync
+      getCookie "Auth"
+        ~onMissing:(sendText "Missing Cookie")
+      >=>
+      (fun (cookie) -> sendText("Hello, " ^ cookie) ())
+      |> createServer |> test
+        ~path: "/"
+        ~expectStatus: 200
+        ~expectBody: "Missing Cookie"
     );
 
   it "Handles cookies - new syntax" (fun _ ->
