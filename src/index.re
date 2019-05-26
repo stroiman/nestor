@@ -37,46 +37,53 @@ module Response = {
 };
 
 /** Reresents the result of a middleware action */
-type httpResultx('a) =
+type httpResult('a) =
   | CannotHandle
-  | Done(Response.t => Response.t)
+  | Done(Response.t)
   | Continue('a, Request.t);
 
-type httpResult('a) = (httpResultx('a) => unit) => unit;
+type asyncHttpResult('a) = (httpResult('a) => unit) => unit;
 
 module Handler = {
-  type t('a) = (Request.t, Response.t) => httpResult('a);
+  type t('a) = (Request.t, Response.t) => asyncHttpResult('a);
   type m('a, 'b) = 'a => t('b);
 
-  let rec (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
-    (req, res) => {
-      let asyncResult = x(req, res);
+  let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
+    (req, res) => (
       cb =>
-        asyncResult(
+        x(
+          req,
+          res,
           fun
           | Continue(x, req) => f(x, req, res, cb)
           | x => cb(x),
-        );
-    };
+        ):
+        asyncHttpResult('b)
+    );
 
   let (>=>) = (f: m('a, 'b), g: m('b, 'c), x: 'a): t('c) => f(x) >>= g;
+
+  let cannotHandle = cb => cb(CannotHandle);
+  let continue = (data, req, _res, cb) => cb(Continue(data, req));
 };
 
 type middleware('a, 'b) = 'a => Handler.t('b);
 
 let path = searchPath: middleware('a, 'a) =>
-  (data, req, res, cb) => {
-    open Request;
+  (data, req, res) => {
     open Js;
+    open Request;
     let requestPath = req |> getPath;
     let length = String.length(searchPath);
     let newPath = String.substr(~from=length, requestPath);
-    String.startsWith(searchPath, requestPath)
-    && String.startsWith("/", requestPath) ?
-      cb(Continue(data, {...req, path: newPath})) : cb(CannotHandle);
+    Handler.(
+      String.startsWith(searchPath, requestPath)
+      && String.startsWith("/", requestPath) ?
+        continue(data, {...req, path: newPath}, res) : cannotHandle
+    );
   };
 
-let sendText = (text, _, _, cb) => cb(Done(Response.send(text)));
+let sendText = (text, _, res, cb) => cb(Done(Response.send(text, res)));
 
 let rec router = (routes, data, req, res, cb) =>
   switch (routes) {
@@ -93,7 +100,7 @@ let rec router = (routes, data, req, res, cb) =>
   };
 
 let tryGetCookie = name: middleware('a, option(string)) =>
-  (_, req, res, cb) => {
+  (_, req, _res, cb) => {
     let cookie = Request.getCookie(name, req);
     cb(Continue(cookie, req));
   };
@@ -120,9 +127,7 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
       | Continue(_) =>
         /* Should probably result in a HTTP 500 status - the server code is misconfigured */
         ()
-      | Done(handler) => {
-          let r = handler(Response.empty);
-          res |> NodeModules.Http.Response.end_(r.text);
-        },
+      | Done(response) =>
+        res |> NodeModules.Http.Response.end_(response.text),
     );
   };
