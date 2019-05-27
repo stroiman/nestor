@@ -14,9 +14,9 @@ open Index.Handler;
 let middleware =
   path("nestor")
   >=> router([
-        path("a") >=> sendText("Hello from /nestor/a"),
-        path("b") >=> sendText("Hello from /nestor/b"),
-        sendText("Hello from /nestor"),
+        path("a") >=> (() => sendText("Hello from /nestor/a")),
+        path("b") >=> (() => sendText("Hello from /nestor/b")),
+        () => sendText("Hello from /nestor"),
       ]);
 
 let reasonServer = createServer(middleware);

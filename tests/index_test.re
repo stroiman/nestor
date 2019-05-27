@@ -10,8 +10,8 @@ describe(
   [
     it("Handles cookies", _ => {
       let handler =
-        getCookie("Auth", ~onMissing=sendText("Missing Cookie"))
-        >=> (cookie => sendText("Hello, " ++ cookie, ()));
+        getCookie("Auth", ~onMissing=() => sendText("Missing Cookie"))
+        >=> (cookie => sendText("Hello, " ++ cookie));
 
       Supertest.request(createServer(handler))
       |> Supertest.get("/b")
@@ -22,7 +22,7 @@ describe(
     }),
     it("Handles scan path", _ => {
       let handler =
-        scanPath("/users/%s", userId => sendText("Hello, " ++ userId));
+        scanPath("/users/%s", (userId, _) => sendText("Hello, " ++ userId));
 
       Supertest.request(createServer(handler))
       |> Supertest.get("/users/john")

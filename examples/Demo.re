@@ -8,9 +8,11 @@ let delay = (x, req) =>
 
 let middleware =
   router([
-    path("path") >=> sendText("Hello from /path"),
-    path("delay") >=> delay >=> sendText("This renders after 1 second"),
-    sendText("Not found"),
+    path("path") >=> (() => sendText("Hello from /path")),
+    path("delay")
+    >=> delay
+    >=> (() => sendText("This renders after 1 second")),
+    () => sendText("Not found"),
   ]);
 
 let server = createServer(middleware);

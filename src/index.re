@@ -66,16 +66,16 @@ type middleware('a, 'b) = 'a => Handler.t('b);
 let path = searchPath: middleware('a, 'a) =>
   (data, req) => {
     open Request;
+    open Js;
     let requestPath = req |> getPath;
-    let length = Js.String.length(searchPath);
-    let newPath = Js.String.substr(~from=length, requestPath);
-    Js.String.startsWith(searchPath, requestPath)
-    && Js.String.startsWith("/", requestPath) ?
+    let length = String.length(searchPath);
+    let newPath = String.substr(~from=length, requestPath);
+    String.startsWith(searchPath, requestPath)
+    && String.startsWith("/", requestPath) ?
       Continue(data, {...req, path: newPath}) : CannotHandle;
   };
 
-let sendText = text: middleware('a, 'b) =>
-  (_, _) => Done(Response.send(text));
+let sendText = (text, _) => Done(Response.send(text));
 
 let rec router = (routes, data, req) =>
   switch (routes) {

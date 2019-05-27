@@ -2,14 +2,12 @@ open RespectWrapper.Dsl.Resync
 open Index
 open Index.Handler
 
-let router = router [
-    path "/a" >=> sendText "Got A";
-    path "/b" >=> sendText "Got B";
-    path "/c/a" >=> sendText "Got CA";
-    path "/c" >=> path "/b" >=> sendText "Got CB";
+let server2 = createServer @@ router [
+    path "/a" >=> (fun _ -> sendText "Got A");
+    path "/b" >=> (fun _ -> sendText "Got B");
+    path "/c/a" >=> (fun _ -> sendText "Got CA");
+    path "/c" >=> path "/b" >=> (fun _ -> sendText "Got CB");
   ]
-
-let server2 = createServer(router)
 
 let test ?expectStatus ?expectBody ~path handler =
     Supertest.request(handler)
@@ -25,7 +23,7 @@ let test ?expectStatus ?expectBody ~path handler =
 
 describe "Server" [
   it "starts with a failing test" (fun _ ->
-      createServer(sendText "Hello, World!") |> test
+      createServer(fun _ -> sendText "Hello, World!") |> test
         ~path: "/"
         ~expectStatus: 200
         ~expectBody: "Hello, World!"
@@ -61,9 +59,9 @@ describe "Server" [
 
   it "Handles cookies - new syntax - missing cookie" (fun _ ->
       getCookie "Auth"
-        ~onMissing:(sendText "Missing Cookie")
+        ~onMissing:(fun _ -> sendText "Missing Cookie")
       >=>
-      (fun (cookie) -> sendText("Hello, " ^ cookie) ())
+      (fun (cookie) -> sendText("Hello, " ^ cookie) )
       |> createServer |> test
         ~path: "/"
         ~expectStatus: 200
@@ -73,9 +71,9 @@ describe "Server" [
   it "Handles cookies - new syntax" (fun _ ->
       let handler =
         getCookie "Auth"
-          ~onMissing:(sendText "Missing Cookie")
+          ~onMissing:(fun _ -> sendText "Missing Cookie")
         >=>
-        (fun (cookie) -> sendText("Hello, " ^ cookie) ())
+        (fun (cookie) -> sendText("Hello, " ^ cookie) )
       in
       Supertest.request(createServer(handler))
       |> Supertest.get("/b")
