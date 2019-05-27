@@ -10,6 +10,8 @@ module Http = {
 
   module Response = {
     type t;
+
+    [@bs.send.pipe: t] external writeHead: int => unit = "";
     [@bs.send.pipe: t] external end_: string => unit = "end";
   };
 

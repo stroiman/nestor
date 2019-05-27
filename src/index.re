@@ -35,6 +35,7 @@ module Response = {
   let empty = {status: 200, text: ""};
 
   let send = (str, res) => {...res, text: str};
+  let status = (status, res) => {...res, status};
 };
 
 /** Reresents the result of a middleware action */
@@ -128,6 +129,7 @@ let getCookie =
 
 let createServer = (handleFunc: middleware('a, 'b)) =>
   (. req, res) => {
+    module HttpResponse = NodeModules.Http.Response;
     let req = Request.from_native_request(req);
     let result = handleFunc((), req, Response.empty);
     result(
@@ -140,7 +142,9 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
       | Continue(_) =>
         /* Should probably result in a HTTP 500 status - the server code is misconfigured */
         ()
-      | Done(response) =>
-        res |> NodeModules.Http.Response.end_(response.text),
+      | Done(response) => {
+          res |> HttpResponse.writeHead(response.status);
+          res |> HttpResponse.end_(response.text);
+        },
     );
   };
