@@ -18,24 +18,23 @@ let server =
           path("/server-error")
           >=> ((_, _req, res) => Response.status(500, res) |> doneSync),
         ]),
+    path("/testCookie")
+    >=> getCookie("Auth", ~onMissing=() => sendText("Missing Cookie"))
+    >=> (cookie => sendText("Hello, " ++ cookie)),
   ])
   |> createServer;
 
 describe(
   "Server",
   [
-    it("Handles cookies", _ => {
-      let handler =
-        getCookie("Auth", ~onMissing=() => sendText("Missing Cookie"))
-        >=> (cookie => sendText("Hello, " ++ cookie));
-
-      Supertest.request(createServer(handler))
-      |> Supertest.get("/b")
+    it("Handles cookies", _ =>
+      Supertest.request(server)
+      |> Supertest.get("/testCookie")
       |> Supertest.set("cookie", "Auth=John")
       |> Supertest.expectStatus(200)
       |> Supertest.expectBody("Hello, John")
-      |> Supertest.endAsync;
-    }),
+      |> Supertest.endAsync
+    ),
     it("Handles scan path", _ => {
       let handler =
         scanPath("/users/%s", (userId, _) => sendText("Hello, " ++ userId));
