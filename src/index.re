@@ -72,6 +72,11 @@ module Handler = {
 
 type middleware('a, 'b) = 'a => Handler.t('b);
 
+let get = (data, req, res) =>
+  Handler.(
+    Request.(req.method == "GET" ? continue(data, req, res) : cannotHandle)
+  );
+
 let path = searchPath: middleware('a, 'a) =>
   (data, req, res) => {
     open Js;
@@ -87,6 +92,8 @@ let path = searchPath: middleware('a, 'a) =>
   };
 
 let sendText = (text, _, res, cb) => cb(Done(Response.send(text, res)));
+
+let sendJson = (str, res, cb) => cb(Done(Response.send(str, res)));
 
 let rec router = (routes, data, req, res, cb) =>
   switch (routes) {
