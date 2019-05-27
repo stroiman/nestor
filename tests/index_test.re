@@ -1,7 +1,16 @@
 open RespectWrapper.Dsl.Resync;
 open Index;
-
 open Index.Handler;
+
+let server =
+  router([
+    path("/testMethod")
+    >=> router([
+          get >=> (() => sendText("GET")),
+          post >=> (() => sendText("POST")),
+        ]),
+  ])
+  |> createServer;
 
 describe(
   "Server",
@@ -28,6 +37,23 @@ describe(
       |> Supertest.expectBody("Hello, john")
       |> Supertest.endAsync;
     }),
+    describe(
+      "GET/POST",
+      [
+        it("Handles GET", _ =>
+          Supertest.request(server)
+          |> Supertest.get("/testMethod")
+          |> Supertest.expectBody("GET")
+          |> Supertest.endAsync
+        ),
+        it("Handles POST", _ =>
+          Supertest.request(server)
+          |> Supertest.post("/testMethod")
+          |> Supertest.expectBody("POST")
+          |> Supertest.endAsync
+        ),
+      ],
+    ),
   ],
 )
 |> register;

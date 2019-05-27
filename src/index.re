@@ -1,5 +1,6 @@
 module Request = {
   type t = {
+    method: string,
     cookies: Js.Dict.t(string),
     path: string,
   };
@@ -21,7 +22,7 @@ module Request = {
       );
     let path = Url.path(url);
 
-    {path, cookies};
+    {path, cookies, method: Http.Request.method(req)};
   };
 };
 
@@ -103,6 +104,13 @@ let rec router = (routes, data, req, res, cb) =>
 
 let scanPath = (pattern, f, data, req) =>
   Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
+
+let method = (m, x, req, res) =>
+  Request.(Handler.(req.method == m ? continue(x, req, res) : cannotHandle));
+
+let get = x => method("GET", x);
+
+let post = x => method("POST", x);
 
 let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req, _res, cb) => {
