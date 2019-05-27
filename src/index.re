@@ -1,5 +1,6 @@
 module Request = {
   type t = {
+    method: string,
     cookies: Js.Dict.t(string),
     path: string,
   };
@@ -21,7 +22,7 @@ module Request = {
       );
     let path = Url.path(url);
 
-    {path, cookies};
+    {path, cookies, method: Http.Request.method(req)};
   };
 };
 
