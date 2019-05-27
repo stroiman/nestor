@@ -73,7 +73,7 @@ describe "Server" [
         getCookie "Auth"
           ~onMissing:(fun _ -> sendText "Missing Cookie")
         >=>
-        (fun (cookie) -> sendText("Hello, " ^ cookie) )
+        (fun cookie -> sendText("Hello, " ^ cookie) )
       in
       Supertest.request(createServer(handler))
       |> Supertest.get("/b")
