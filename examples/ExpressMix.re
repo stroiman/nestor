@@ -11,15 +11,14 @@
 open Index;
 open Index.Handler;
 
-let middleware =
+let reasonServer =
   path("nestor")
   >=> router([
         path("a") >=> (() => sendText("Hello from /nestor/a")),
         path("b") >=> (() => sendText("Hello from /nestor/b")),
         () => sendText("Hello from /nestor"),
-      ]);
-
-let reasonServer = createServer(middleware);
+      ])
+  |> createServer;
 
 %raw
 {|

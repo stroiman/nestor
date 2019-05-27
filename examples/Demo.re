@@ -4,16 +4,15 @@ open Index.Handler;
 let delay = (x, req, _res, cb) =>
   Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore;
 
-let middleware =
+let server =
   router([
     path("path") >=> (() => sendText("Hello from /path")),
     path("delay")
     >=> delay
     >=> (() => sendText("This renders after 1 second")),
     () => sendText("Not found"),
-  ]);
-
-let server = createServer(middleware);
+  ])
+  |> createServer;
 
 %raw
 {|

@@ -56,12 +56,14 @@ module Handler = {
           res,
           fun
           | Continue(x, req) => f(x, req, res, cb)
-          | x => cb(x),
+          | CannotHandle => cb(CannotHandle)
+          | Done(x) => cb(Done(x)),
         ):
         asyncHttpResult('b)
     );
 
-  let (>=>) = (f: m('a, 'b), g: m('b, 'c), x: 'a): t('c) => f(x) >>= g;
+  let (>=>) = (f: m('a, 'b), g: m('b, 'c)): m('a, 'c) =>
+    (x: 'a) => f(x) >>= g;
 
   let cannotHandle = cb => cb(CannotHandle);
   let continue = (data, req, _res, cb) => cb(Continue(data, req));
