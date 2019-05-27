@@ -101,6 +101,9 @@ let rec router = (routes, data, req, res, cb) =>
     )
   };
 
+let scanPath = (pattern, f, data, req) =>
+  Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
+
 let tryGetCookie = name: middleware('a, option(string)) =>
   (_, req, _res, cb) => {
     let cookie = Request.getCookie(name, req);

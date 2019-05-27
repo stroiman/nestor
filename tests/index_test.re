@@ -3,9 +3,6 @@ open Index;
 
 open Index.Handler;
 
-let scanPath = (pattern, f, data, req) =>
-  Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
-
 describe(
   "Server",
   [
