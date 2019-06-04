@@ -44,7 +44,8 @@ type httpResult('a) =
   | Done(Response.t)
   | Continue('a, Request.t);
 
-type asyncHttpResult('a) = (httpResult('a) => unit) => unit;
+type async('a) = (('a => unit, exn => unit)) => unit;
+type asyncHttpResult('a) = async(httpResult('a));
 
 module Handler = {
   type t('a) = (Request.t, Response.t) => asyncHttpResult('a);
@@ -52,14 +53,17 @@ module Handler = {
 
   let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     (req, res) => (
-      cb =>
+      ((cb, err)) =>
         x(
           req,
           res,
-          fun
-          | Continue(x, req) => f(x, req, res, cb)
-          | CannotHandle => cb(CannotHandle)
-          | Done(x) => cb(Done(x)),
+          (
+            fun
+            | Continue(x, req) => f(x, req, res, (cb, err))
+            | CannotHandle => cb(CannotHandle)
+            | Done(x) => cb(Done(x)),
+            err,
+          ),
         ):
         asyncHttpResult('b)
     );
@@ -67,8 +71,9 @@ module Handler = {
   let (>=>) = (f: m('a, 'b), g: m('b, 'c)): m('a, 'c) =>
     (x: 'a) => f(x) >>= g;
 
-  let cannotHandle = cb => cb(CannotHandle);
-  let continue = (data, req, _res, cb) => cb(Continue(data, req));
+  let done_ = (response, cb) => cb(Done(response));
+  let cannotHandle = ((cb, _)) => cb(CannotHandle);
+  let continue = (data, req, _res, (cb, _)) => cb(Continue(data, req));
 };
 
 type middleware('a, 'b) = 'a => Handler.t('b);
@@ -87,9 +92,10 @@ let path = searchPath: middleware('a, 'a) =>
     );
   };
 
-let sendText = (text, _, res, cb) => cb(Done(Response.send(text, res)));
+let sendText = (text, _, res, (cb, _)) =>
+  cb(Done(Response.send(text, res)));
 
-let rec router = (routes, data, req, res, cb) =>
+let rec router = (routes, data, req, res, (cb, err)) =>
   switch (routes) {
   | [] => cb(CannotHandle)
   | [route, ...routes] =>
@@ -97,9 +103,12 @@ let rec router = (routes, data, req, res, cb) =>
       data,
       req,
       res,
-      fun
-      | CannotHandle => router(routes, data, req, res, cb)
-      | x => cb(x),
+      (
+        fun
+        | CannotHandle => router(routes, data, req, res, (cb, err))
+        | x => cb(x),
+        err,
+      ),
     )
   };
 
@@ -114,7 +123,7 @@ let get = x => method("GET", x);
 let post = x => method("POST", x);
 
 let tryGetCookie = name: middleware('a, option(string)) =>
-  (_, req, _res, cb) => {
+  (_, req, _res, (cb, _)) => {
     let cookie = Request.getCookie(name, req);
     cb(Continue(cookie, req));
   };
@@ -123,7 +132,7 @@ let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req, res) =>
     switch (Request.getCookie(name, req)) {
-    | Some(cookie) => (cb => cb(Continue(cookie, req)))
+    | Some(cookie) => (((cb, _)) => cb(Continue(cookie, req)))
     | None => onMissing(x, req, res)
     };
 
@@ -132,7 +141,7 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
     module HttpResponse = NodeModules.Http.Response;
     let req = Request.from_native_request(req);
     let result = handleFunc((), req, Response.empty);
-    result(
+    result((
       fun
       | CannotHandle =>
         /* If the handler cannot handle the request, then doing nothing might
@@ -146,5 +155,9 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
           res |> HttpResponse.writeHead(response.status);
           res |> HttpResponse.end_(response.text);
         },
-    );
+      _exn => {
+        res |> HttpResponse.writeHead(500);
+        res |> HttpResponse.end_("Internal server error");
+      },
+    ));
   };

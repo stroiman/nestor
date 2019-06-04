@@ -19,6 +19,7 @@ let test ?expectStatus ?expectBody ~path handler =
         | Some(e) -> Supertest.expectBody(e)
         | None -> fun x -> x)
     |> Supertest.endAsync
+
 ;;
 
 describe "Server" [

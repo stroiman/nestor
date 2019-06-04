@@ -2,7 +2,7 @@ open RespectWrapper.Dsl.Resync;
 open Index;
 open Index.Handler;
 
-let doneSync = (res, cb) => cb(Done(res));
+let doneSync = (res, (cb, _)) => cb(Done(res));
 
 let server =
   router([
