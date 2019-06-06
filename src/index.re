@@ -1,6 +1,25 @@
 module Request = {
+  module Body = {
+    type t = NodeModules.Http.Request.Body.t;
+
+    /* [@bs.val] [@bs.scope "JSON"] external toJson: t => Js.Json.t = "parse"; */
+
+    let bodyString = (input: t, cb: string => unit): unit => {
+      let on = NodeModules.Http.Request.Body.on;
+      let data = ref("");
+      input
+      ->on("data", d => {
+          data := data^ ++ d;
+          ();
+        });
+      input->on("end", _ => cb(data^));
+    };
+  };
+
   type t = {
+    body: Body.t,
     method: string,
+    headers: Js.Dict.t(string),
     cookies: Js.Dict.t(string),
     path: string,
   };
@@ -8,6 +27,8 @@ module Request = {
   let getCookie = (name, req) => req.cookies->Js.Dict.get(name);
 
   let getPath = req => req.path;
+
+  let getHeader = (name, req) => req.headers->Js.Dict.get(name);
 
   let from_native_request = req => {
     open NodeModules;
@@ -22,7 +43,13 @@ module Request = {
       );
     let path = Url.path(url);
 
-    {path, cookies, method: Http.Request.method(req)};
+    {
+      body: Http.Request.body(req),
+      path,
+      cookies,
+      headers,
+      method: Http.Request.method(req),
+    };
   };
 };
 
@@ -71,7 +98,7 @@ module Handler = {
   let (>=>) = (f: m('a, 'b), g: m('b, 'c)): m('a, 'c) =>
     (x: 'a) => f(x) >>= g;
 
-  let done_ = (response, cb) => cb(Done(response));
+  let done_ = (response, (cb, _)) => cb(Done(response));
   let cannotHandle = ((cb, _)) => cb(CannotHandle);
   let continue = (data, req, _res, (cb, _)) => cb(Continue(data, req));
 };
@@ -123,16 +150,13 @@ let get = x => method("GET", x);
 let post = x => method("POST", x);
 
 let tryGetCookie = name: middleware('a, option(string)) =>
-  (_, req, _res, (cb, _)) => {
-    let cookie = Request.getCookie(name, req);
-    cb(Continue(cookie, req));
-  };
+  (_, req, res) => Handler.continue(Request.getCookie(name, req), req, res);
 
 let getCookie =
     (~onMissing: middleware('a, string), name): middleware('a, string) =>
   (x: 'a, req, res) =>
     switch (Request.getCookie(name, req)) {
-    | Some(cookie) => (((cb, _)) => cb(Continue(cookie, req)))
+    | Some(cookie) => Handler.continue(cookie, req, res)
     | None => onMissing(x, req, res)
     };
 

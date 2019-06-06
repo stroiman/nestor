@@ -6,7 +6,10 @@ module Dsl = {
       let mapTestfunc =
           (fn, ctx: Respect_ctx.t, callback: Respect.Domain.executionCallback) => {
         let f = _ => callback(TestSucceeded);
-        let fe = _ => callback(TestFailed);
+        let fe = err => {
+          Js.log(err);
+          callback(TestFailed);
+        };
         fn(ctx) |> Async.run(~fe, f);
       };
     };
