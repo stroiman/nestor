@@ -2,18 +2,27 @@ open RespectWrapper.Dsl.Resync
 open Index
 open Handler
 
-let getBodyString _ (req: Index.Request.t) _res (cb, _) = Request.Body.bodyString req.body (fun s -> cb(Continue (s, req)))
+[@@@ocaml.warning "-44"]
+let  getBodyString () (req: Index.Request.t) (_res: Index.Response.t) =
+  let open Async in
+  Request.Body.bodyStringA req.body
+  >>= (fun s -> Handler.continue s)
+[@@@ocaml.warning "+44"]
 
-let asJson bodyString req res =
-    match (Request.getHeader("content-type")(req)) with
-      | Some("application/json") ->
-        (try
-          let json = Js.Json.parseExn(bodyString) in
-          continue json req res
-        with _ ->
-          done_ (res |> Response.status(400) |> Response.send("Invalid JSON")))
-      | _ ->
-        done_ (res |> Response.status(400) |> Response.send("Missing content type"))
+(* Request.Body.bodyString req.body (fun s -> cb(Continue (s, req))) *)
+
+let asJson (bodyString: string) (req: Request.t) (res: Response.t) =
+  match (Request.getHeader("content-type")(req)) with
+  | Some("application/json") ->
+    (try
+       let json = Js.Json.parseExn(bodyString) in
+       continue json
+     with _ ->
+       done_ (res |> Response.status(400) |> Response.send("Invalid JSON")))
+  | _ ->
+    done_ (res |> Response.status(400) |> Response.send("Missing content type"))
+
+let getBodyJson = getBodyString >=> asJson
 
 type user = {
   firstName: string;
@@ -29,14 +38,13 @@ let decodeUser js =
     <*> (decodeField "lastName" decodeString)
   ) |> run js
 
-let decode decoder a req res =
+let decode decoder a _req res =
   match decoder a with
-  | Some(x) -> continue x req res
+  | Some(x) -> continue x
   | None -> done_(res |> Response.status(400) |> Response.send("Cannot decode"))
 
 let handler: (_, unit) middleware =
-  getBodyString >=> asJson >=>
-  (decode decodeUser) >=>
+  getBodyJson >=> (decode decodeUser) >=>
   (fun user -> sendText ("Hello, " ^ user.firstName ^ " " ^ user.lastName))
 
 let server = createServer @@ handler

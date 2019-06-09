@@ -10,6 +10,7 @@
   */
 open Index;
 open Index.Handler;
+open Index.Middlewares;
 
 let reasonServer =
   path("nestor")

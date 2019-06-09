@@ -1,8 +1,9 @@
 open Index;
 open Index.Handler;
+open Index.Middlewares;
 
-let delay = (x, req, _res, (cb, _)) =>
-  Js.Global.setTimeout(() => cb(Continue(x, req)), 1000) |> ignore;
+let delay = (x, _req, _res, (cb, _)) =>
+  Js.Global.setTimeout(() => cb(Continue(x)), 1000) |> ignore;
 
 let server =
   router([

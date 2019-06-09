@@ -1,6 +1,7 @@
 open RespectWrapper.Dsl.Resync
 open Index
 open Index.Handler
+open Index.Middlewares
 
 let server2 = createServer @@ router [
     path "/a" >=> (fun _ -> sendText "Got A");
@@ -10,15 +11,15 @@ let server2 = createServer @@ router [
   ]
 
 let test ?expectStatus ?expectBody ~path handler =
-    Supertest.request(handler)
-    |> Supertest.get(path)
-    |> (match expectStatus with
-        | Some(e) -> Supertest.expectStatus(e)
-        | None -> fun x -> x)
-    |> (match expectBody with
-        | Some(e) -> Supertest.expectBody(e)
-        | None -> fun x -> x)
-    |> Supertest.endAsync
+  Supertest.request(handler)
+  |> Supertest.get(path)
+  |> (match expectStatus with
+      | Some(e) -> Supertest.expectStatus(e)
+      | None -> fun x -> x)
+  |> (match expectBody with
+      | Some(e) -> Supertest.expectBody(e)
+      | None -> fun x -> x)
+  |> Supertest.endAsync
 
 ;;
 

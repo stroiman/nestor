@@ -1,6 +1,7 @@
 open RespectWrapper.Dsl.Resync;
 open Index;
 open Index.Handler;
+open Index.Middlewares;
 
 let doneSync = (res, (cb, _)) => cb(Done(res));
 

@@ -1,8 +1,8 @@
+type async('a) = (('a => unit, exn => unit)) => unit;
+
 module Request = {
   module Body = {
     type t = NodeModules.Http.Request.Body.t;
-
-    /* [@bs.val] [@bs.scope "JSON"] external toJson: t => Js.Json.t = "parse"; */
 
     let bodyString = (input: t, cb: string => unit): unit => {
       let on = NodeModules.Http.Request.Body.on;
@@ -14,6 +14,18 @@ module Request = {
         });
       input->on("end", _ => cb(data^));
     };
+
+    let bodyStringA = (input: t): async(string) =>
+      ((fs, _fe)) => {
+        let on = NodeModules.Http.Request.Body.on;
+        let data = ref("");
+        input
+        ->on("data", d => {
+            data := data^ ++ d;
+            ();
+          });
+        input->on("end", _ => fs(data^));
+      };
   };
 
   type t = {
@@ -69,10 +81,19 @@ module Response = {
 type httpResult('a) =
   | CannotHandle
   | Done(Response.t)
-  | Continue('a, Request.t);
+  | Continue('a)
+  | NewContext('a, Request.t, Response.t);
 
-type async('a) = (('a => unit, exn => unit)) => unit;
 type asyncHttpResult('a) = async(httpResult('a));
+
+module Async = {
+  type t('a) = async('a);
+
+  let return = (x: 'a): t('a) => ((fs, _fe)) => fs(x);
+
+  let (>>=) = (x: t('b), f: 'b => t('a)): t('a) =>
+    ((fs, fe)) => x((y => f(y, (fs, fe)), fe));
+};
 
 module Handler = {
   type t('a) = (Request.t, Response.t) => asyncHttpResult('a);
@@ -86,7 +107,8 @@ module Handler = {
           res,
           (
             fun
-            | Continue(x, req) => f(x, req, res, (cb, err))
+            | Continue(x) => f(x, req, res, (cb, err))
+            | NewContext(x, req, res) => f(x, req, res, (cb, err))
             | CannotHandle => cb(CannotHandle)
             | Done(x) => cb(Done(x)),
             err,
@@ -100,7 +122,10 @@ module Handler = {
 
   let done_ = (response, (cb, _)) => cb(Done(response));
   let cannotHandle = ((cb, _)) => cb(CannotHandle);
-  let continue = (data, req, _res, (cb, _)) => cb(Continue(data, req));
+  let continue = (data: 'a): asyncHttpResult('a) =>
+    ((cb, _)) => cb(Continue(data));
+  let newContext = (data: 'a, req, res): asyncHttpResult('a) =>
+    ((cb, _)) => cb(NewContext(data, req, res));
 };
 
 type middleware('a, 'b) = 'a => Handler.t('b);
@@ -115,50 +140,12 @@ let path = searchPath: middleware('a, 'a) =>
     Handler.(
       String.startsWith(searchPath, requestPath)
       && String.startsWith("/", requestPath) ?
-        continue(data, {...req, path: newPath}, res) : cannotHandle
+        newContext(data, {...req, path: newPath}, res) : cannotHandle
     );
   };
 
 let sendText = (text, _, res, (cb, _)) =>
   cb(Done(Response.send(text, res)));
-
-let rec router = (routes, data, req, res, (cb, err)) =>
-  switch (routes) {
-  | [] => cb(CannotHandle)
-  | [route, ...routes] =>
-    route(
-      data,
-      req,
-      res,
-      (
-        fun
-        | CannotHandle => router(routes, data, req, res, (cb, err))
-        | x => cb(x),
-        err,
-      ),
-    )
-  };
-
-let scanPath = (pattern, f, data, req) =>
-  Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
-
-let method = (m, x, req, res) =>
-  Request.(Handler.(req.method == m ? continue(x, req, res) : cannotHandle));
-
-let get = x => method("GET", x);
-
-let post = x => method("POST", x);
-
-let tryGetCookie = name: middleware('a, option(string)) =>
-  (_, req, res) => Handler.continue(Request.getCookie(name, req), req, res);
-
-let getCookie =
-    (~onMissing: middleware('a, string), name): middleware('a, string) =>
-  (x: 'a, req, res) =>
-    switch (Request.getCookie(name, req)) {
-    | Some(cookie) => Handler.continue(cookie, req, res)
-    | None => onMissing(x, req, res)
-    };
 
 let createServer = (handleFunc: middleware('a, 'b)) =>
   (. req, res) => {
@@ -172,6 +159,7 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
            be the most sensible thing to do, as other request handlers could have
            been attached to the http server. */
         ()
+        | NewContext(_)
       | Continue(_) =>
         /* Should probably result in a HTTP 500 status - the server code is misconfigured */
         ()
@@ -185,3 +173,48 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
       },
     ));
   };
+
+/**
+  * Contains components for building a handler/web application, e.g. routers, method filters,
+  * cookie extraction, body parsing, etc.
+  */
+module Middlewares = {
+  let rec router = (routes, data, req, res, (cb, err)) =>
+    switch (routes) {
+      | [] => cb(CannotHandle)
+      | [route, ...routes] =>
+      route(
+        data,
+        req,
+        res,
+        (
+          fun
+          | CannotHandle => router(routes, data, req, res, (cb, err))
+          | x => cb(x),
+          err,
+        ),
+      )
+    };
+
+  let scanPath = (pattern, f, data, req) =>
+    Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
+
+    let method = (m, x, req, _res) =>
+      Request.(Handler.(req.method == m ? continue(x) : cannotHandle));
+
+    let get = x => method("GET", x);
+
+    let post = x => method("POST", x);
+
+    let tryGetCookie = name: middleware('a, option(string)) =>
+      (_, req, _res) => Handler.continue(Request.getCookie(name, req));
+
+    let getCookie =
+      (~onMissing: middleware('a, string), name): middleware('a, string) =>
+                                                  (x: 'a, req, res) =>
+                                                  switch (Request.getCookie(name, req)) {
+                                                    | Some(cookie) => Handler.continue(cookie)
+                                                    | None => onMissing(x, req, res)
+                                                    };
+
+}
