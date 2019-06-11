@@ -4,10 +4,10 @@ open Index.Handler
 open Index.Middlewares
 
 let server2 = createServer @@ router [
-    path "/a" >=> (fun _ -> sendText "Got A");
-    path "/b" >=> (fun _ -> sendText "Got B");
-    path "/c/a" >=> (fun _ -> sendText "Got CA");
-    path "/c" >=> path "/b" >=> (fun _ -> sendText "Got CB");
+    path "/a" >> ( sendText "Got A");
+    path "/b" >> ( sendText "Got B");
+    path "/c/a" >> ( sendText "Got CA");
+    path "/c" >> (path "/b") >> (sendText "Got CB");
   ]
 
 let test ?expectStatus ?expectBody ~path handler =
@@ -25,7 +25,7 @@ let test ?expectStatus ?expectBody ~path handler =
 
 describe "Server" [
   it "starts with a failing test" (fun _ ->
-      createServer(fun _ -> sendText "Hello, World!") |> test
+      createServer(sendText "Hello, World!") |> test
         ~path: "/"
         ~expectStatus: 200
         ~expectBody: "Hello, World!"
@@ -61,8 +61,8 @@ describe "Server" [
 
   it "Handles cookies - new syntax - missing cookie" (fun _ ->
       getCookie "Auth"
-        ~onMissing:(fun _ -> sendText "Missing Cookie")
-      >=>
+        ~onMissing:(sendText "Missing Cookie")
+      >>=
       (fun (cookie) -> sendText("Hello, " ^ cookie) )
       |> createServer |> test
         ~path: "/"
@@ -73,8 +73,8 @@ describe "Server" [
   it "Handles cookies - new syntax" (fun _ ->
       let handler =
         getCookie "Auth"
-          ~onMissing:(fun _ -> sendText "Missing Cookie")
-        >=>
+          ~onMissing:(sendText "Missing Cookie")
+        >>=
         (fun cookie -> sendText("Hello, " ^ cookie) )
       in
       Supertest.request(createServer(handler))

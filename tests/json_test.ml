@@ -3,7 +3,7 @@ open Index
 open Handler
 
 [@@@ocaml.warning "-44"]
-let  getBodyString () (req: Index.Request.t) (_res: Index.Response.t) =
+let  getBodyString (req: Index.Request.t) (_res: Index.Response.t) =
   let open Async in
   Request.Body.bodyStringA req.body
   >>= (fun s -> Handler.continue s)
@@ -22,7 +22,7 @@ let asJson (bodyString: string) (req: Request.t) (res: Response.t) =
   | _ ->
     done_ (res |> Response.status(400) |> Response.send("Missing content type"))
 
-let getBodyJson = getBodyString >=> asJson
+let getBodyJson: Js.Json.t Handler.t = getBodyString >>= asJson
 
 type user = {
   firstName: string;
@@ -43,8 +43,8 @@ let decode decoder a _req res =
   | Some(x) -> continue x
   | None -> done_(res |> Response.status(400) |> Response.send("Cannot decode"))
 
-let handler: (_, unit) middleware =
-  getBodyJson >=> (decode decodeUser) >=>
+let handler: (unit) Handler.t =
+  getBodyJson >>= (decode decodeUser) >>=
   (fun user -> sendText ("Hello, " ^ user.firstName ^ " " ^ user.lastName))
 
 let server = createServer @@ handler

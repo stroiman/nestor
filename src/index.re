@@ -7,11 +7,10 @@ module Request = {
     let bodyString = (input: t, cb: string => unit): unit => {
       let on = NodeModules.Http.Request.Body.on;
       let data = ref("");
-      input
-      ->on("data", d => {
-          data := data^ ++ d;
-          ();
-        });
+      input->on("data", d => {
+        data := data^ ++ d;
+        ();
+      });
       input->on("end", _ => cb(data^));
     };
 
@@ -19,11 +18,10 @@ module Request = {
       ((fs, _fe)) => {
         let on = NodeModules.Http.Request.Body.on;
         let data = ref("");
-        input
-        ->on("data", d => {
-            data := data^ ++ d;
-            ();
-          });
+        input->on("data", d => {
+          data := data^ ++ d;
+          ();
+        });
         input->on("end", _ => fs(data^));
       };
   };
@@ -117,6 +115,8 @@ module Handler = {
         asyncHttpResult('b)
     );
 
+  let (>>) = (x, y) => x >>= _ => y;
+
   let (>=>) = (f: m('a, 'b), g: m('b, 'c)): m('a, 'c) =>
     (x: 'a) => f(x) >>= g;
 
@@ -130,8 +130,8 @@ module Handler = {
 
 type middleware('a, 'b) = 'a => Handler.t('b);
 
-let path = searchPath: middleware('a, 'a) =>
-  (data, req, res) => {
+let path = (searchPath): Handler.t('a) =>
+  (req, res) => {
     open Js;
     open Request;
     let requestPath = req |> getPath;
@@ -139,19 +139,19 @@ let path = searchPath: middleware('a, 'a) =>
     let newPath = String.substr(~from=length, requestPath);
     Handler.(
       String.startsWith(searchPath, requestPath)
-      && String.startsWith("/", requestPath) ?
-        newContext(data, {...req, path: newPath}, res) : cannotHandle
+      && String.startsWith("/", requestPath)
+        ? newContext((), {...req, path: newPath}, res) : cannotHandle
     );
   };
 
 let sendText = (text, _, res, (cb, _)) =>
   cb(Done(Response.send(text, res)));
 
-let createServer = (handleFunc: middleware('a, 'b)) =>
+let createServer = (handleFunc: Handler.t('b)) =>
   (. req, res) => {
     module HttpResponse = NodeModules.Http.Response;
     let req = Request.from_native_request(req);
-    let result = handleFunc((), req, Response.empty);
+    let result = handleFunc(req, Response.empty);
     result((
       fun
       | CannotHandle =>
@@ -159,7 +159,7 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
            be the most sensible thing to do, as other request handlers could have
            been attached to the http server. */
         ()
-        | NewContext(_)
+      | NewContext(_)
       | Continue(_) =>
         /* Should probably result in a HTTP 500 status - the server code is misconfigured */
         ()
@@ -179,42 +179,40 @@ let createServer = (handleFunc: middleware('a, 'b)) =>
   * cookie extraction, body parsing, etc.
   */
 module Middlewares = {
-  let rec router = (routes, data, req, res, (cb, err)) =>
-    switch (routes) {
+  let rec router = (routes): Handler.t('a) =>
+    (req, res, (cb, err)) =>
+      switch (routes) {
       | [] => cb(CannotHandle)
       | [route, ...routes] =>
-      route(
-        data,
-        req,
-        res,
-        (
-          fun
-          | CannotHandle => router(routes, data, req, res, (cb, err))
-          | x => cb(x),
-          err,
-        ),
-      )
-    };
+        route(
+          req,
+          res,
+          (
+            fun
+            | CannotHandle => router(routes, req, res, (cb, err))
+            | x => cb(x),
+            err,
+          ),
+        )
+      };
 
-  let scanPath = (pattern, f, data, req) =>
-    Scanf.sscanf(req |> Request.getPath, pattern, f, data, req);
+  let scanPath = (pattern, f): Handler.t('a) =>
+    (req, res) => Scanf.sscanf(req |> Request.getPath, pattern, f, req, res);
 
-    let method = (m, x, req, _res) =>
-      Request.(Handler.(req.method == m ? continue(x) : cannotHandle));
+  let method = (m, req, _res) =>
+    Request.(Handler.(req.method == m ? continue() : cannotHandle));
 
-    let get = x => method("GET", x);
+  let get: Handler.t(unit) = method("GET");
 
-    let post = x => method("POST", x);
+  let post: Handler.t(unit) = method("POST");
 
-    let tryGetCookie = name: middleware('a, option(string)) =>
-      (_, req, _res) => Handler.continue(Request.getCookie(name, req));
+  let tryGetCookie = (name): Handler.t(option(string)) =>
+    (req, _res) => Handler.continue(Request.getCookie(name, req));
 
-    let getCookie =
-      (~onMissing: middleware('a, string), name): middleware('a, string) =>
-                                                  (x: 'a, req, res) =>
-                                                  switch (Request.getCookie(name, req)) {
-                                                    | Some(cookie) => Handler.continue(cookie)
-                                                    | None => onMissing(x, req, res)
-                                                    };
-
-}
+  let getCookie = (~onMissing: Handler.t(string), name): Handler.t(string) =>
+    (req, res) =>
+      switch (Request.getCookie(name, req)) {
+      | Some(cookie) => Handler.continue(cookie)
+      | None => onMissing(req, res)
+      };
+};

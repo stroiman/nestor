@@ -8,20 +8,20 @@ let doneSync = (res, (cb, _)) => cb(Done(res));
 let server =
   router([
     path("/testMethod")
-    >=> router([
-          get >=> (() => sendText("GET")),
-          post >=> (() => sendText("POST")),
+    >> router([
+          get >> sendText("GET"),
+          post >> sendText("POST"),
         ]),
     path("/testStatus")
-    >=> router([
+    >> router([
           path("/ok")
-          >=> ((_, _req, res) => Response.status(200, res) |> doneSync),
+          >> ((_req, res) => Response.status(200, res) |> doneSync),
           path("/server-error")
-          >=> ((_, _req, res) => Response.status(500, res) |> doneSync),
+          >> ((_req, res) => Response.status(500, res) |> doneSync),
         ]),
     path("/testCookie")
-    >=> getCookie("Auth", ~onMissing=() => sendText("Missing Cookie"))
-    >=> (cookie => sendText("Hello, " ++ cookie)),
+    >> getCookie("Auth", ~onMissing=sendText("Missing Cookie"))
+    >>= cookie => sendText("Hello, " ++ cookie),
   ])
   |> createServer;
 
@@ -37,8 +37,8 @@ describe(
       |> Supertest.endAsync
     ),
     it("Handles scan path", _ => {
-      let handler =
-        scanPath("/users/%s", (userId, _) => sendText("Hello, " ++ userId));
+      let handler: Handler.t(_) =
+        scanPath("/users/%s", (userId) => sendText("Hello, " ++ userId));
 
       Supertest.request(createServer(handler))
       |> Supertest.get("/users/john")
