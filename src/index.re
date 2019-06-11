@@ -128,8 +128,6 @@ module Handler = {
     ((cb, _)) => cb(NewContext(data, req, res));
 };
 
-type middleware('a, 'b) = 'a => Handler.t('b);
-
 let path = (searchPath): Handler.t('a) =>
   (req, res) => {
     open Js;
