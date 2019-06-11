@@ -95,7 +95,6 @@ module Async = {
 
 module Handler = {
   type t('a) = (Request.t, Response.t) => asyncHttpResult('a);
-  type m('a, 'b) = 'a => t('b);
 
   let (>>=) = (x: t('a), f: 'a => t('b)): t('b) =>
     (req, res) => (
@@ -115,9 +114,9 @@ module Handler = {
         asyncHttpResult('b)
     );
 
-  let (>>) = (x, y) => x >>= _ => y;
+  let (>>) = (x, y) => x >>= (_ => y);
 
-  let (>=>) = (f: m('a, 'b), g: m('b, 'c)): m('a, 'c) =>
+  let (>=>) = (f: 'a => t('b), g: 'b => t('c)): ('a => t('c)) =>
     (x: 'a) => f(x) >>= g;
 
   let done_ = (response, (cb, _)) => cb(Done(response));
@@ -127,23 +126,6 @@ module Handler = {
   let newContext = (data: 'a, req, res): asyncHttpResult('a) =>
     ((cb, _)) => cb(NewContext(data, req, res));
 };
-
-let path = (searchPath): Handler.t('a) =>
-  (req, res) => {
-    open Js;
-    open Request;
-    let requestPath = req |> getPath;
-    let length = String.length(searchPath);
-    let newPath = String.substr(~from=length, requestPath);
-    Handler.(
-      String.startsWith(searchPath, requestPath)
-      && String.startsWith("/", requestPath)
-        ? newContext((), {...req, path: newPath}, res) : cannotHandle
-    );
-  };
-
-let sendText = (text, _, res, (cb, _)) =>
-  cb(Done(Response.send(text, res)));
 
 let createServer = (handleFunc: Handler.t('b)) =>
   (. req, res) => {
@@ -213,4 +195,21 @@ module Middlewares = {
       | Some(cookie) => Handler.continue(cookie)
       | None => onMissing(req, res)
       };
+
+  let path = (searchPath): Handler.t('a) =>
+    (req, res) => {
+      open Js;
+      open Request;
+      let requestPath = req |> getPath;
+      let length = String.length(searchPath);
+      let newPath = String.substr(~from=length, requestPath);
+      Handler.(
+        String.startsWith(searchPath, requestPath)
+        && String.startsWith("/", requestPath)
+          ? newContext((), {...req, path: newPath}, res) : cannotHandle
+      );
+    };
+
+  let sendText = (text, _, res, (cb, _)) =>
+    cb(Done(Response.send(text, res)));
 };

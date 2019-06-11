@@ -1,6 +1,7 @@
 open RespectWrapper.Dsl.Resync
 open Index
 open Handler
+open Middlewares
 
 [@@@ocaml.warning "-44"]
 let  getBodyString (req: Index.Request.t) (_res: Index.Response.t) =
