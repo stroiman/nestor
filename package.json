@@ -17,7 +17,7 @@
     "@stroiman/async": "^0.7.0",
     "@stroiman/respect": "^0.10.0",
     "bs-platform": "^5.0.3",
-    "express": "^4.17.0",
+    "express": "^4.17.3",
     "nodemon": "^1.19.0",
     "supertest": "^4.0.2"
   },
